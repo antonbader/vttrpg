@@ -56,6 +56,101 @@
         const PLAYER_NAME = "{{ player_name }}";
         const IS_DISPLAY = {{ 'true' if is_display else 'false' }};
 
+        // --- Pan & Zoom ---
+        let viewScale = 1.0;
+        let viewOffsetX = 0;
+        let viewOffsetY = 0;
+        let isPanning = false;
+        let panStartX = 0;
+        let panStartY = 0;
+
+        function updateViewTransform() {
+            // Need to make sure container is defined before using it,
+            // since we declare it lower down in the original script. Let's just find it by ID.
+            const cvsContainer = document.getElementById('canvas-container');
+            if(cvsContainer) {
+                cvsContainer.style.transformOrigin = "0 0";
+                cvsContainer.style.transform = `scale(${viewScale}) translate(${viewOffsetX}px, ${viewOffsetY}px)`;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const btnZoomIn = document.getElementById('btn-zoom-in');
+            const btnZoomOut = document.getElementById('btn-zoom-out');
+            const btnZoomReset = document.getElementById('btn-zoom-reset');
+
+            if(btnZoomIn) {
+                btnZoomIn.addEventListener('click', () => {
+                    viewScale *= 1.2;
+                    updateViewTransform();
+                });
+            }
+
+            if(btnZoomOut) {
+                btnZoomOut.addEventListener('click', () => {
+                    viewScale /= 1.2;
+                    updateViewTransform();
+                });
+            }
+
+            if(btnZoomReset) {
+                btnZoomReset.addEventListener('click', () => {
+                    viewScale = 1.0;
+                    viewOffsetX = 0;
+                    viewOffsetY = 0;
+                    updateViewTransform();
+                });
+            }
+
+            // Middle mouse button or Space+LeftClick to pan
+            let spacePressed = false;
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') spacePressed = true;
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.code === 'Space') spacePressed = false;
+            });
+
+            // Use window for panning logic
+            window.addEventListener('mousedown', (e) => {
+                if (e.button === 1 || (e.button === 0 && spacePressed)) {
+                    isPanning = true;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    e.preventDefault();
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (isPanning) {
+                    const dx = (e.clientX - panStartX) / viewScale;
+                    const dy = (e.clientY - panStartY) / viewScale;
+                    viewOffsetX += dx;
+                    viewOffsetY += dy;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    updateViewTransform();
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (e.button === 1 || (e.button === 0 && spacePressed)) {
+                    isPanning = false;
+                }
+            });
+
+            window.addEventListener('wheel', (e) => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    const zoomFactor = e.deltaY < 0 ? 1.1 : 1/1.1;
+                    // Basic zoom around top-left
+                    viewScale *= zoomFactor;
+                    updateViewTransform();
+                }
+            }, { passive: false });
+        });
+
+
         let gridSize = {{ scene.grid_size }};
         let gridOffsetX = {{ scene.grid_offset_x }};
         let gridOffsetY = {{ scene.grid_offset_y }};
