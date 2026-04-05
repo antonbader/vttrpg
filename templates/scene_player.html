@@ -185,10 +185,10 @@
             isPanning = false;
         });
 
-        let gridSize = {{ scene.grid_size }};
-        let gridOffsetX = {{ scene.grid_offset_x }};
-        let gridOffsetY = {{ scene.grid_offset_y }};
-        let scale = {{ scene.scale }};
+        let gridSize = {{ scene.grid_size or 50 }};
+        let gridOffsetX = {{ scene.grid_offset_x or 0 }};
+        let gridOffsetY = {{ scene.grid_offset_y or 0 }};
+        let scale = {{ scene.scale or 1.5 }};
         let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
         let gridThickness = {{ scene.grid_thickness or 1 }};
 
@@ -198,18 +198,6 @@
         {% if scene.background_image %}
             bgImage.src = "{{ url_for('uploaded_file', filename=scene.background_image) }}";
         {% endif %}
-
-        const bgCanvas = document.getElementById('bgLayer');
-        const gridCanvas = document.getElementById('gridLayer');
-        const tokenCanvas = document.getElementById('tokenLayer');
-        const fowCanvas = document.getElementById('fowLayer');
-
-        const bgCtx = bgCanvas.getContext('2d');
-        const gridCtx = gridCanvas.getContext('2d');
-        const tokenCtx = tokenCanvas.getContext('2d');
-        const fowCtx = fowCanvas.getContext('2d');
-
-        const container = document.getElementById('canvas-container');
 
         const socket = io();
         socket.on('connect', () => {
@@ -235,9 +223,13 @@
 
         let fowMaskData = "{{ scene.fow_mask or '' }}";
 
-        bgImage.onload = () => {
-            const w = bgImage.width;
-            const h = bgImage.height;
+        function initCanvases() {
+            let w = window.innerWidth;
+            let h = window.innerHeight;
+            if (bgImage.src && bgImage.width > 0) {
+                w = bgImage.width;
+                h = bgImage.height;
+            }
             [bgCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
                 c.width = w;
                 c.height = h;
@@ -250,7 +242,14 @@
             }
 
             drawAll();
-        };
+        }
+
+        if (bgImage.src) {
+            bgImage.onload = initCanvases;
+        } else {
+            // Initialize immediately if no background image
+            window.addEventListener('load', initCanvases);
+        }
 
         function fillFowFullBlack() {
             fowCtx.globalCompositeOperation = 'source-over';

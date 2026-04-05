@@ -267,10 +267,10 @@
         }
 
         const SCENE_ID = {{ scene.id }};
-        let gridSize = {{ scene.grid_size }};
-        let gridOffsetX = {{ scene.grid_offset_x }};
-        let gridOffsetY = {{ scene.grid_offset_y }};
-        let scale = {{ scene.scale }};
+        let gridSize = {{ scene.grid_size or 50 }};
+        let gridOffsetX = {{ scene.grid_offset_x or 0 }};
+        let gridOffsetY = {{ scene.grid_offset_y or 0 }};
+        let scale = {{ scene.scale or 1.5 }};
         let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
         let gridThickness = {{ scene.grid_thickness or 1 }};
 
@@ -411,9 +411,13 @@
         let fowShape = 'round'; // 'round' or 'square'
 
 
-        bgImage.onload = () => {
-            const w = bgImage.width;
-            const h = bgImage.height;
+        function initCanvases() {
+            let w = window.innerWidth;
+            let h = window.innerHeight;
+            if (bgImage.src && bgImage.width > 0) {
+                w = bgImage.width;
+                h = bgImage.height;
+            }
             [bgCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
                 c.width = w;
                 c.height = h;
@@ -431,7 +435,14 @@
                 fillFow();
                 drawAll();
             }
-        };
+        }
+
+        if (bgImage.src) {
+            bgImage.onload = initCanvases;
+        } else {
+            // Initialize immediately if no background image
+            window.addEventListener('load', initCanvases);
+        }
 
         function fillFow() {
             fowCtx.globalCompositeOperation = 'source-over';
