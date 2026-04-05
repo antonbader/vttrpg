@@ -10,7 +10,7 @@
         body { margin: 0; overflow: hidden; background: #000; color: #fff; }
         #app-container { display: flex; height: 100vh; position: relative; }
 
-        #canvas-container { flex-grow: 1; position: relative; overflow: auto; }
+        #canvas-container { flex-grow: 1; position: relative; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 
         /* The player UI overlay */
@@ -34,7 +34,15 @@
             <small style="color: #aaa;">Du kannst nur Token bewegen, die "{{ player_name }}" heißen.</small>
         </div>
 
-        <div id="canvas-container">
+
+        <div id="canvas-container" style="position: relative;">
+            <div id="view-controls" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; display: flex; gap: 5px;">
+                <button id="btn-pan-mode" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Verschieben-Modus (Pan)">✋</button>
+                <button id="btn-zoom-in" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom In">➕</button>
+                <button id="btn-zoom-out" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom Out">➖</button>
+                <button id="btn-zoom-reset" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Reset View">Reset</button>
+            </div>
+
             <canvas id="bgLayer"></canvas>
             <canvas id="gridLayer"></canvas>
             <canvas id="tokenLayer"></canvas>
@@ -48,10 +56,108 @@
         const PLAYER_NAME = "{{ player_name }}";
         const IS_DISPLAY = {{ 'true' if is_display else 'false' }};
 
+        // --- Pan & Zoom ---
+        let viewScale = 1.0;
+        let viewOffsetX = 0;
+        let viewOffsetY = 0;
+        let isPanning = false;
+        let panStartX = 0;
+        let panStartY = 0;
+
+        function updateViewTransform() {
+            // Need to make sure container is defined before using it,
+            // since we declare it lower down in the original script. Let's just find it by ID.
+            const cvsContainer = document.getElementById('canvas-container');
+            if(cvsContainer) {
+                cvsContainer.style.transformOrigin = "0 0";
+                cvsContainer.style.transform = `scale(${viewScale}) translate(${viewOffsetX}px, ${viewOffsetY}px)`;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const btnZoomIn = document.getElementById('btn-zoom-in');
+            const btnZoomOut = document.getElementById('btn-zoom-out');
+            const btnZoomReset = document.getElementById('btn-zoom-reset');
+
+            if(btnZoomIn) {
+                btnZoomIn.addEventListener('click', () => {
+                    viewScale *= 1.2;
+                    updateViewTransform();
+                });
+            }
+
+            if(btnZoomOut) {
+                btnZoomOut.addEventListener('click', () => {
+                    viewScale /= 1.2;
+                    updateViewTransform();
+                });
+            }
+
+            if(btnZoomReset) {
+                btnZoomReset.addEventListener('click', () => {
+                    viewScale = 1.0;
+                    viewOffsetX = 0;
+                    viewOffsetY = 0;
+                    updateViewTransform();
+                });
+            }
+
+            // Middle mouse button or Space+LeftClick to pan
+            let spacePressed = false;
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') spacePressed = true;
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.code === 'Space') spacePressed = false;
+            });
+
+            // Use window for panning logic
+            window.addEventListener('mousedown', (e) => {
+                if (e.button === 1 || (e.button === 0 && spacePressed)) {
+                    isPanning = true;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    e.preventDefault();
+                }
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (isPanning) {
+                    const dx = (e.clientX - panStartX) / viewScale;
+                    const dy = (e.clientY - panStartY) / viewScale;
+                    viewOffsetX += dx;
+                    viewOffsetY += dy;
+                    panStartX = e.clientX;
+                    panStartY = e.clientY;
+                    updateViewTransform();
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (e.button === 1 || (e.button === 0 && spacePressed)) {
+                    isPanning = false;
+                }
+            });
+
+            window.addEventListener('wheel', (e) => {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                    const zoomFactor = e.deltaY < 0 ? 1.1 : 1/1.1;
+                    // Basic zoom around top-left
+                    viewScale *= zoomFactor;
+                    updateViewTransform();
+                }
+            }, { passive: false });
+        });
+
+
         let gridSize = {{ scene.grid_size }};
         let gridOffsetX = {{ scene.grid_offset_x }};
         let gridOffsetY = {{ scene.grid_offset_y }};
         let scale = {{ scene.scale }};
+        let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
+        let gridThickness = {{ scene.grid_thickness or 1 }};
+
 
         let tokens = {{ tokens|tojson|safe }};
         let bgImage = new Image();
@@ -131,8 +237,8 @@
 
         function drawGrid() {
             gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
-            gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; // less visible for players
-            gridCtx.lineWidth = 1;
+            gridCtx.strokeStyle = gridColor;
+            gridCtx.lineWidth = gridThickness;
             gridCtx.beginPath();
 
             for (let x = gridOffsetX; x < gridCanvas.width; x += gridSize) {
@@ -234,8 +340,8 @@
         if (!IS_DISPLAY) {
             tokenCanvas.addEventListener('mousedown', (e) => {
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
+                const mouseX = (e.clientX - rect.left) / viewScale;
+                const mouseY = (e.clientY - rect.top) / viewScale;
 
                 // Find clicked token (reverse order for top-most)
                 for (let i = tokens.length - 1; i >= 0; i--) {
@@ -259,8 +365,8 @@
             tokenCanvas.addEventListener('mousemove', (e) => {
                 if (dragToken) {
                     const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = e.clientX - rect.left;
-                    const mouseY = e.clientY - rect.top;
+                    const mouseX = (e.clientX - rect.left) / viewScale;
+                    const mouseY = (e.clientY - rect.top) / viewScale;
 
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
@@ -291,8 +397,8 @@
                 if(e.touches.length > 1) return;
                 const touch = e.touches[0];
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = touch.clientX - rect.left;
-                const mouseY = touch.clientY - rect.top;
+                const mouseX = (touch.clientX - rect.left) / viewScale;
+                const mouseY = (touch.clientY - rect.top) / viewScale;
 
                 for (let i = tokens.length - 1; i >= 0; i--) {
                     const t = tokens[i];
@@ -314,8 +420,8 @@
                 if (dragToken) {
                     const touch = e.touches[0];
                     const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = touch.clientX - rect.left;
-                    const mouseY = touch.clientY - rect.top;
+                    const mouseX = (touch.clientX - rect.left) / viewScale;
+                    const mouseY = (touch.clientY - rect.top) / viewScale;
 
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
@@ -347,6 +453,8 @@
             gridSize = data.grid_size;
             gridOffsetX = data.grid_offset_x;
             gridOffsetY = data.grid_offset_y;
+            gridColor = data.grid_color || 'rgba(255, 255, 255, 0.4)';
+            gridThickness = data.grid_thickness || 1;
             scale = data.scale;
             drawAll();
         });
@@ -366,6 +474,15 @@
                 t.y = data.y;
                 drawTokens();
             }
+        });
+
+        socket.on('token_deleted', (data) => {
+            tokens = tokens.filter(tk => tk.id !== data.token_id);
+            if (dragToken && dragToken.id === data.token_id) {
+                dragToken = null;
+                measuring = false;
+            }
+            drawTokens();
         });
 
         socket.on('fow_updated', (data) => {
