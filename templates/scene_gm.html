@@ -65,6 +65,14 @@
                 </button>
             </form>
 
+            {% if scene.background_image %}
+            <form action="{{ url_for('delete_scene_bg', scene_id=scene.id) }}" method="POST" onsubmit="return confirm('Möchten Sie das Hintergrundbild wirklich löschen? Dadurch wird die Szene komplett zurückgesetzt.');">
+                <button type="submit" class="w-full py-1 mt-1 bg-red-700 hover:bg-red-600 border border-red-600 rounded text-sm transition-colors text-white">
+                    🗑️ Hintergrundbild löschen
+                </button>
+            </form>
+            {% endif %}
+
             {% if not scene.background_image %}
                 <div class="bg-gray-800 p-4 rounded-md border border-gray-700">
                     <h3 class="text-sm font-bold text-gray-300 mb-2">Hintergrundbild setzen</h3>
@@ -142,6 +150,14 @@
 
                     <label>Brush Size: <span id="fow-brush-val" class="text-white">50</span>px</label>
                     <input type="range" id="fow-brush-size" min="10" max="200" value="50">
+
+                    <label class="mt-2">Umriss Farbe:</label>
+                    <select id="fow-outline-color" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-white text-xs">
+                        <option value="green">Grün</option>
+                        <option value="red">Rot</option>
+                        <option value="black">Schwarz</option>
+                        <option value="white">Weiß</option>
+                    </select>
                 </div>
             </div>
             </div> <!-- End sidebar-left-content -->
@@ -409,6 +425,9 @@
         let fowMaskData = "{{ scene.fow_mask or '' }}";
         let fowMode = 'erase'; // 'erase' or 'add'
         let fowShape = 'round'; // 'round' or 'square'
+        let fowOutlineColor = 'green';
+        let fowMouseX = -1000;
+        let fowMouseY = -1000;
 
 
         function initCanvases() {
@@ -591,6 +610,19 @@
                 uiCtx.fillStyle = "white";
                 uiCtx.fillText(selectedToken.name, drawX, drawY);
             }
+
+            // Draw FOW Brush Outline
+            if (isFowMode && fowMouseX !== -1000 && fowMouseY !== -1000) {
+                uiCtx.strokeStyle = fowOutlineColor;
+                uiCtx.lineWidth = 2;
+                uiCtx.beginPath();
+                if (fowShape === 'round') {
+                    uiCtx.arc(fowMouseX, fowMouseY, fowBrushSize, 0, Math.PI * 2);
+                } else {
+                    uiCtx.rect(fowMouseX - fowBrushSize, fowMouseY - fowBrushSize, fowBrushSize * 2, fowBrushSize * 2);
+                }
+                uiCtx.stroke();
+            }
         }
 
         // Grid Controls Logic
@@ -677,6 +709,16 @@
             e.target.style.backgroundColor = isFowMode ? 'green' : '';
             e.target.style.color = isFowMode ? 'white' : '';
             fowCanvas.style.pointerEvents = isFowMode ? 'auto' : 'none';
+            if (!isFowMode) {
+                fowMouseX = -1000;
+                fowMouseY = -1000;
+            }
+            drawUI();
+        });
+
+        document.getElementById('fow-outline-color').addEventListener('change', (e) => {
+            fowOutlineColor = e.target.value;
+            if (isFowMode) drawUI();
         });
 
         document.getElementById('btn-fow-mode-erase').addEventListener('click', (e) => {
@@ -749,11 +791,24 @@
         });
 
         fowCanvas.addEventListener('mousemove', (e) => {
-            if (!isFowMode || !isDrawingFow) return;
+            if (!isFowMode) return;
             const rect = fowCanvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) / viewScale;
             const y = (e.clientY - rect.top) / viewScale;
-            drawFowBrush(x, y);
+            fowMouseX = x;
+            fowMouseY = y;
+            if (isDrawingFow) {
+                drawFowBrush(x, y);
+            }
+            drawUI();
+        });
+
+        container.addEventListener('mouseout', (e) => {
+            if (isFowMode) {
+                fowMouseX = -1000;
+                fowMouseY = -1000;
+                drawUI();
+            }
         });
 
         window.addEventListener('mouseup', () => {
