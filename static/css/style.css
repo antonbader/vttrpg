@@ -159,4 +159,19 @@ input[type="text"]:focus, textarea:focus {
 .empty-state {
     color: #7f8c8d;
     font-style: italic;
+}/* Dark Theme Adjustments for Gaming */
+body {
+    --background-color: #1a1a1a;
+    --card-bg: #2d2d2d;
+    --text-color: #e0e0e0;
+    --primary-color: #9b59b6;
+    --secondary-color: #8e44ad;
 }
+
+h1, h2, h3, h4 { color: var(--primary-color); }
+input[type="text"], textarea, select { background: #333; color: white; border: 1px solid #555; }
+.card { border-color: #444; }
+.description { color: #aaa; }
+.adventures-section { background: #222; }
+.adventures-section h4 { color: #ddd; }
+.adventure-list li { border-bottom-color: #444; }

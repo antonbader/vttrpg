@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GM Szene: {{ scene.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            light: '#b39ddb',
+                            DEFAULT: '#673ab7',
+                            dark: '#311b92',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #app-container { display: flex; height: 100vh; }
+        #sidebar { width: 320px; background: #1f2937; padding: 1.5rem; overflow-y: auto; border-right: 1px solid #374151; display: flex; flex-direction: column; gap: 1rem; }
+        #canvas-container { flex-grow: 1; position: relative; overflow: auto; background-color: #000; }
+        canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+        .control-group label { display: block; font-size: 0.85em; font-weight: 500; margin-bottom: 0.25rem; color: #d1d5db; }
+        .control-group input[type=range] { width: 100%; accent-color: #b39ddb; }
+        .template-item { background: #374151; padding: 0.5rem; border-radius: 0.375rem; cursor: grab; display: flex; align-items: center; gap: 0.75rem; border: 1px solid #4b5563; transition: border-color 0.2s; }
+        .template-item:hover { border-color: #b39ddb; }
+        .template-item:active { cursor: grabbing; }
+        .token-img-preview { width: 32px; height: 32px; border-radius: 9999px; object-fit: cover; border: 1px solid #000; }
+        .token-placeholder { width: 32px; height: 32px; border-radius: 9999px; border: 2px solid black; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; color: white; font-weight: bold; overflow: hidden; }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="sidebar">
+            <div>
+                <h2 class="text-2xl font-bold text-brand-light mb-1">{{ scene.name }}</h2>
+                <a href="{{ url_for('index') }}" class="text-gray-400 text-sm hover:text-white transition-colors">← Zurück zum Dashboard</a>
+            </div>
+
+            <form action="{{ url_for('activate_scene', scene_id=scene.id) }}" method="POST">
+                <button type="submit" class="w-full py-2 px-4 rounded font-bold text-sm transition-colors {% if scene.is_active %}bg-green-600 hover:bg-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.5)]{% else %}bg-gray-700 hover:bg-gray-600 text-gray-300 border border-gray-600{% endif %}">
+                    {% if scene.is_active %}🟢 Szene ist Aktiv für Spieler{% else %}Für Spieler aktivieren{% endif %}
+                </button>
+            </form>
+
+            {% if not scene.background_image %}
+                <div class="bg-gray-800 p-4 rounded-md border border-gray-700">
+                    <h3 class="text-sm font-bold text-gray-300 mb-2">Hintergrundbild setzen</h3>
+                    <form action="{{ url_for('upload_scene_bg', scene_id=scene.id) }}" method="POST" enctype="multipart/form-data" class="flex flex-col gap-2">
+                        <input type="file" name="background" accept="image/*" required class="text-xs text-gray-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600">
+                        <button type="submit" class="bg-brand text-white py-1 rounded text-sm hover:bg-brand-light hover:text-gray-900 transition-colors">Hochladen</button>
+                    </form>
+                </div>
+            {% endif %}
+
+            <div>
+                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Grid Controls</h3>
+                <div class="control-group mb-3">
+                    <label>Grid Size (px): <span id="grid-size-val" class="text-white">{{ scene.grid_size }}</span></label>
+                    <input type="range" id="grid-size" min="20" max="200" value="{{ scene.grid_size }}">
+                </div>
+                <div class="control-group mb-3">
+                    <label>Offset X: <span id="grid-x-val" class="text-white">{{ scene.grid_offset_x }}</span></label>
+                    <input type="range" id="grid-x" min="-100" max="100" value="{{ scene.grid_offset_x }}">
+                </div>
+                <div class="control-group mb-3">
+                    <label>Offset Y: <span id="grid-y-val" class="text-white">{{ scene.grid_offset_y }}</span></label>
+                    <input type="range" id="grid-y" min="-100" max="100" value="{{ scene.grid_offset_y }}">
+                </div>
+                <div class="control-group">
+                    <label>Scale (m/square): <span id="grid-scale-val" class="text-white">{{ scene.scale }}</span></label>
+                    <input type="number" id="grid-scale" step="0.1" value="{{ scene.scale }}" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-white text-sm focus:outline-none focus:border-brand-light">
+                </div>
+            </div>
+
+            <div class="flex-grow overflow-hidden flex flex-col">
+                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Library Templates</h3>
+                <div id="templates-list" class="overflow-y-auto pr-1 space-y-2 pb-2">
+                    {% for template in templates %}
+                        <div class="template-item" draggable="true" data-template-id="{{ template.id }}">
+                            {% if template.image_path %}
+                                <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" class="token-img-preview">
+                            {% else %}
+                                <div class="token-placeholder" style="background-color: {% if template.type == 'Player' %}#2563eb{% elif template.type == 'NPC' %}#dc2626{% else %}#eab308{% endif %}; color: {% if template.type == 'Item' %}black{% else %}white{% endif %};">
+                                    {{ template.name[:3] }}
+                                </div>
+                            {% endif %}
+                            <span class="text-sm font-medium">{{ template.name }}</span>
+                        </div>
+                    {% endfor %}
+                    {% if not templates %}
+                        <p class="text-xs text-gray-500 italic">Keine Templates in der Bibliothek.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="mt-auto">
+                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Fog of War</h3>
+                <div class="control-group">
+                    <button id="btn-fow-brush" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">🖌️ Brush: Radieren</button>
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-fow-reset" class="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs transition-colors text-gray-300">⬛ Verhüllen</button>
+                        <button id="btn-fow-clear" class="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs transition-colors text-gray-300">⬜ Aufdecken</button>
+                    </div>
+                    <label>Brush Size: <span id="fow-brush-val" class="text-white">50</span>px</label>
+                    <input type="range" id="fow-brush-size" min="10" max="200" value="50">
+                </div>
+            </div>
+        </div> <!-- End of sidebar -->
+
+        <div id="canvas-container">
+            <canvas id="bgLayer"></canvas>
+            <canvas id="gridLayer"></canvas>
+            <canvas id="tokenLayer"></canvas>
+            <canvas id="fowLayer" style="opacity: 0.6; pointer-events: none;"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const SCENE_ID = {{ scene.id }};
+        let gridSize = {{ scene.grid_size }};
+        let gridOffsetX = {{ scene.grid_offset_x }};
+        let gridOffsetY = {{ scene.grid_offset_y }};
+        let scale = {{ scene.scale }};
+
+        let tokens = {{ tokens|tojson|safe }};
+        let bgImage = new Image();
+        {% if scene.background_image %}
+            bgImage.src = "{{ url_for('uploaded_file', filename=scene.background_image) }}";
+        {% endif %}
+
+        const bgCanvas = document.getElementById('bgLayer');
+        const gridCanvas = document.getElementById('gridLayer');
+        const tokenCanvas = document.getElementById('tokenLayer');
+        const fowCanvas = document.getElementById('fowLayer');
+        const bgCtx = bgCanvas.getContext('2d');
+        const gridCtx = gridCanvas.getContext('2d');
+        const tokenCtx = tokenCanvas.getContext('2d');
+        const fowCtx = fowCanvas.getContext('2d');
+
+        const container = document.getElementById('canvas-container');
+
+        const socket = io();
+        socket.on('connect', () => {
+            socket.emit('join', {scene_id: SCENE_ID});
+        });
+
+        let isFowMode = false;
+        let fowBrushSize = 50;
+        let isDrawingFow = false;
+        let fowMaskData = "{{ scene.fow_mask or '' }}";
+
+        bgImage.onload = () => {
+            const w = bgImage.width;
+            const h = bgImage.height;
+            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas].forEach(c => {
+                c.width = w;
+                c.height = h;
+            });
+
+            if (fowMaskData) {
+                const img = new Image();
+                img.onload = () => {
+                    fowCtx.clearRect(0, 0, fowCanvas.width, fowCanvas.height);
+                    fowCtx.drawImage(img, 0, 0);
+                    drawAll();
+                };
+                img.src = fowMaskData;
+            } else {
+                fillFow();
+                drawAll();
+            }
+        };
+
+        function fillFow() {
+            fowCtx.globalCompositeOperation = 'source-over';
+            fowCtx.fillStyle = 'black';
+            fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+        }
+
+        function clearFow() {
+            fowCtx.clearRect(0, 0, fowCanvas.width, fowCanvas.height);
+        }
+
+        function saveFow() {
+            const dataUrl = fowCanvas.toDataURL();
+            socket.emit('update_fow', { scene_id: SCENE_ID, mask: dataUrl });
+        }
+
+        function drawAll() {
+            if(bgImage.src) {
+                bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
+                bgCtx.drawImage(bgImage, 0, 0);
+            }
+            drawGrid();
+            drawTokens();
+        }
+
+        function drawGrid() {
+            gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+            gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            gridCtx.lineWidth = 1;
+            gridCtx.beginPath();
+
+            for (let x = gridOffsetX; x < gridCanvas.width; x += gridSize) {
+                gridCtx.moveTo(x, 0);
+                gridCtx.lineTo(x, gridCanvas.height);
+            }
+            for (let y = gridOffsetY; y < gridCanvas.height; y += gridSize) {
+                gridCtx.moveTo(0, y);
+                gridCtx.lineTo(gridCanvas.width, y);
+            }
+            gridCtx.stroke();
+        }
+
+        const loadedImages = {};
+
+        function drawTokens() {
+            tokenCtx.clearRect(0, 0, tokenCanvas.width, tokenCanvas.height);
+
+            tokens.forEach(token => {
+                const drawX = token.x;
+                const drawY = token.y;
+
+                if (token.image_path) {
+                    if (!loadedImages[token.image_path]) {
+                        loadedImages[token.image_path] = new Image();
+                        loadedImages[token.image_path].src = token.image_path;
+                        loadedImages[token.image_path].onload = () => drawTokens();
+                    } else if (loadedImages[token.image_path].complete) {
+                        tokenCtx.save();
+                        tokenCtx.beginPath();
+                        tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI * 2, true);
+                        tokenCtx.closePath();
+                        tokenCtx.clip();
+                        tokenCtx.drawImage(loadedImages[token.image_path], drawX, drawY, gridSize, gridSize);
+                        tokenCtx.restore();
+
+                        // Border
+                        tokenCtx.strokeStyle = 'black';
+                        tokenCtx.lineWidth = 2;
+                        tokenCtx.beginPath();
+                        tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI * 2, true);
+                        tokenCtx.stroke();
+                    }
+                } else {
+                    let color = 'yellow';
+                    if (token.type === 'Player') color = 'blue';
+                    if (token.type === 'NPC') color = 'red';
+
+                    tokenCtx.fillStyle = color;
+                    tokenCtx.beginPath();
+                    tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI*2);
+                    tokenCtx.fill();
+                    tokenCtx.strokeStyle = 'black';
+                    tokenCtx.lineWidth = 2;
+                    tokenCtx.stroke();
+
+                    tokenCtx.fillStyle = color === 'yellow' ? 'black' : 'white';
+                    tokenCtx.textAlign = 'center';
+                    tokenCtx.textBaseline = 'middle';
+                    tokenCtx.font = `${Math.max(10, gridSize/4)}px Arial`;
+                    tokenCtx.fillText(token.name.substring(0,5), drawX + gridSize/2, drawY + gridSize/2);
+                }
+            });
+
+            if (measuring && dragToken) {
+                tokenCtx.beginPath();
+                tokenCtx.moveTo(dragStartX + gridSize/2, dragStartY + gridSize/2);
+                tokenCtx.lineTo(dragToken.x + gridSize/2, dragToken.y + gridSize/2);
+                tokenCtx.strokeStyle = 'rgba(255,0,0,0.8)';
+                tokenCtx.lineWidth = 3;
+                tokenCtx.setLineDash([5, 5]);
+                tokenCtx.stroke();
+                tokenCtx.setLineDash([]);
+
+                const dx = dragToken.x - dragStartX;
+                const dy = dragToken.y - dragStartY;
+                const distSquares = Math.sqrt(dx*dx + dy*dy) / gridSize;
+                const distMeters = (distSquares * scale).toFixed(1);
+
+                tokenCtx.fillStyle = 'rgba(0,0,0,0.7)';
+                tokenCtx.fillRect(dragToken.x + gridSize/2 + 10, dragToken.y - 20, 60, 25);
+                tokenCtx.fillStyle = 'white';
+                tokenCtx.fillText(`${distMeters}m`, dragToken.x + gridSize/2 + 40, dragToken.y - 7);
+            }
+        }
+
+        // Grid Controls Logic
+        function emitGridUpdate() {
+            socket.emit('update_grid', {
+                scene_id: SCENE_ID,
+                grid_size: gridSize,
+                grid_offset_x: gridOffsetX,
+                grid_offset_y: gridOffsetY,
+                scale: scale
+            });
+        }
+
+        document.getElementById('grid-size').addEventListener('input', (e) => {
+            gridSize = parseInt(e.target.value);
+            document.getElementById('grid-size-val').innerText = gridSize;
+            drawAll();
+            emitGridUpdate();
+        });
+        document.getElementById('grid-x').addEventListener('input', (e) => {
+            gridOffsetX = parseInt(e.target.value);
+            document.getElementById('grid-x-val').innerText = gridOffsetX;
+            drawAll();
+            emitGridUpdate();
+        });
+        document.getElementById('grid-y').addEventListener('input', (e) => {
+            gridOffsetY = parseInt(e.target.value);
+            document.getElementById('grid-y-val').innerText = gridOffsetY;
+            drawAll();
+            emitGridUpdate();
+        });
+        document.getElementById('grid-scale').addEventListener('change', (e) => {
+            scale = parseFloat(e.target.value);
+            document.getElementById('grid-scale-val').innerText = scale;
+            emitGridUpdate();
+        });
+
+        // Drag & Drop Templates -> Canvas
+        const templateItems = document.querySelectorAll('.template-item');
+        templateItems.forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('template_id', item.dataset.templateId);
+            });
+        });
+
+        container.addEventListener('dragover', (e) => e.preventDefault());
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const templateId = e.dataTransfer.getData('template_id');
+            if (templateId) {
+                const rect = tokenCanvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Snap
+                const snappedX = Math.floor((x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                const snappedY = Math.floor((y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                socket.emit('add_token', {
+                    scene_id: SCENE_ID,
+                    template_id: templateId,
+                    x: snappedX,
+                    y: snappedY
+                });
+            }
+        });
+
+        // Fog of War Controls
+        document.getElementById('btn-fow-brush').addEventListener('click', (e) => {
+            isFowMode = !isFowMode;
+            e.target.style.backgroundColor = isFowMode ? 'green' : '';
+            e.target.style.color = isFowMode ? 'white' : '';
+            fowCanvas.style.pointerEvents = isFowMode ? 'auto' : 'none';
+        });
+
+        document.getElementById('btn-fow-reset').addEventListener('click', () => {
+            fillFow();
+            saveFow();
+        });
+
+        document.getElementById('btn-fow-clear').addEventListener('click', () => {
+            clearFow();
+            saveFow();
+        });
+
+        document.getElementById('fow-brush-size').addEventListener('input', (e) => {
+            fowBrushSize = parseInt(e.target.value);
+            document.getElementById('fow-brush-val').innerText = fowBrushSize;
+        });
+
+        // FOW Canvas events
+        function drawFowBrush(x, y) {
+            fowCtx.globalCompositeOperation = 'destination-out';
+            fowCtx.beginPath();
+            fowCtx.arc(x, y, fowBrushSize, 0, Math.PI * 2);
+            fowCtx.fill();
+        }
+
+        fowCanvas.addEventListener('mousedown', (e) => {
+            if (!isFowMode) return;
+            isDrawingFow = true;
+            const rect = fowCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            drawFowBrush(x, y);
+        });
+
+        fowCanvas.addEventListener('mousemove', (e) => {
+            if (!isFowMode || !isDrawingFow) return;
+            const rect = fowCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            drawFowBrush(x, y);
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isDrawingFow) {
+                isDrawingFow = false;
+                saveFow();
+            }
+        });
+
+
+        // Token Interaction on Canvas
+        let dragToken = null;
+        let measuring = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        tokenCanvas.addEventListener('mousedown', (e) => {
+            if (isFowMode) return;
+            const rect = tokenCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // Find clicked token (reverse order for top-most)
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const t = tokens[i];
+                if (mouseX >= t.x && mouseX <= t.x + gridSize &&
+                    mouseY >= t.y && mouseY <= t.y + gridSize) {
+                    dragToken = t;
+                    dragStartX = t.x;
+                    dragStartY = t.y;
+                    measuring = true;
+                    break;
+                }
+            }
+        });
+
+        tokenCanvas.addEventListener('mousemove', (e) => {
+            if (dragToken) {
+                const rect = tokenCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                dragToken.x = mouseX - gridSize/2;
+                dragToken.y = mouseY - gridSize/2;
+                drawTokens();
+            }
+        });
+
+        tokenCanvas.addEventListener('mouseup', (e) => {
+            if (dragToken) {
+                // Snap to grid
+                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                socket.emit('move_token', {
+                    token_id: dragToken.id,
+                    x: dragToken.x,
+                    y: dragToken.y
+                });
+
+                dragToken = null;
+                measuring = false;
+                drawTokens();
+            }
+        });
+
+        // Sockets receiving
+        socket.on('grid_updated', (data) => {
+            gridSize = data.grid_size;
+            gridOffsetX = data.grid_offset_x;
+            gridOffsetY = data.grid_offset_y;
+            scale = data.scale;
+
+            document.getElementById('grid-size').value = gridSize;
+            document.getElementById('grid-size-val').innerText = gridSize;
+            document.getElementById('grid-x').value = gridOffsetX;
+            document.getElementById('grid-x-val').innerText = gridOffsetX;
+            document.getElementById('grid-y').value = gridOffsetY;
+            document.getElementById('grid-y-val').innerText = gridOffsetY;
+            document.getElementById('grid-scale').value = scale;
+            document.getElementById('grid-scale-val').innerText = scale;
+
+            drawAll();
+        });
+
+        socket.on('token_added', (token) => {
+            tokens.push(token);
+            drawTokens();
+        });
+
+        socket.on('token_moved', (data) => {
+            const t = tokens.find(tk => tk.id === data.token_id);
+            if (t) {
+                t.x = data.x;
+                t.y = data.y;
+                drawTokens();
+            }
+        });
+
+        socket.on('fow_updated', (data) => {
+            if (data.mask) {
+                const img = new Image();
+                img.onload = () => {
+                    fowCtx.clearRect(0, 0, fowCanvas.width, fowCanvas.height);
+                    fowCtx.drawImage(img, 0, 0);
+                };
+                img.src = data.mask;
+            } else {
+                fillFow();
+            }
+        });
+
+    </script>
+</body>
+</html>

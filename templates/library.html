@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bibliothek: {{ campaign.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            light: '#b39ddb',
+                            DEFAULT: '#673ab7',
+                            dark: '#311b92',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen pb-10">
+    <header class="bg-brand-dark text-white p-6 text-center shadow-lg mb-8">
+        <h1 class="text-3xl font-bold">Bibliothek: {{ campaign.name }}</h1>
+        <a href="{{ url_for('index') }}" class="inline-block mt-4 bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-600 transition-colors">Zurück zum Dashboard</a>
+    </header>
+
+    <main class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <section class="md:col-span-1 bg-gray-800 p-6 rounded-lg shadow-md h-fit border border-gray-700">
+            <h2 class="text-xl font-semibold text-brand-light mb-4 border-b border-gray-700 pb-2">Neues Template</h2>
+            <form action="{{ url_for('create_template', campaign_id=campaign.id) }}" method="POST" enctype="multipart/form-data">
+                <div class="mb-4">
+                    <label for="name" class="block mb-2 font-medium">Name:</label>
+                    <input type="text" id="name" name="name" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                </div>
+                <div class="mb-4">
+                    <label for="type" class="block mb-2 font-medium">Typ:</label>
+                    <select id="type" name="type" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                        <option value="Player">Spieler (Player)</option>
+                        <option value="NPC">NPC</option>
+                        <option value="Item">Gegenstand (Item)</option>
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="image" class="block mb-2 font-medium text-gray-300">Token Bild (optional):</label>
+                    <input type="file" id="image" name="image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600">
+                </div>
+                <button type="submit" class="w-full bg-brand text-white py-2 rounded hover:bg-brand-light hover:text-gray-900 transition-colors font-medium">Template speichern</button>
+            </form>
+        </section>
+
+        <section class="md:col-span-2">
+            <h2 class="text-2xl font-semibold text-brand-light mb-6 border-b border-gray-700 pb-2">Aktuelle Templates</h2>
+            {% if templates %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% for template in templates %}
+                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex items-center gap-4">
+                            {% if template.image_path %}
+                                <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" alt="{{ template.name }}" class="w-12 h-12 rounded-full object-cover border border-gray-600">
+                            {% else %}
+                                <div class="w-12 h-12 rounded-full border-2 border-black flex items-center justify-center text-[10px] font-bold overflow-hidden" style="background-color: {% if template.type == 'Player' %}#2563eb{% elif template.type == 'NPC' %}#dc2626{% else %}#eab308{% endif %}; color: {% if template.type == 'Item' %}black{% else %}white{% endif %};">
+                                    {{ template.name[:5] }}
+                                </div>
+                            {% endif %}
+                            <div>
+                                <h3 class="font-bold text-white">{{ template.name }}</h3>
+                                <span class="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">{{ template.type }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center mb-8">
+                    <p class="text-gray-400 italic">Noch keine Templates in dieser Kampagne.</p>
+                </div>
+            {% endif %}
+
+            <h2 class="text-2xl font-semibold text-brand-light mb-6 border-b border-gray-700 pb-2 mt-12">Template importieren</h2>
+            <form action="{{ url_for('import_template', campaign_id=campaign.id) }}" method="POST" class="bg-gray-800 p-6 rounded-lg border border-gray-700 flex flex-col md:flex-row gap-4 items-end">
+                <div class="flex-grow w-full md:w-auto">
+                    <label for="source_campaign_id" class="block mb-2 font-medium text-sm text-gray-300">Aus Kampagne:</label>
+                    <select id="source_campaign_id" name="source_campaign_id" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light" onchange="updateTemplateSelect()">
+                        <option value="">-- Kampagne wählen --</option>
+                        {% for other in other_campaigns %}
+                            <option value="{{ other.id }}">{{ other.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="flex-grow w-full md:w-auto">
+                    <label for="template_id" class="block mb-2 font-medium text-sm text-gray-300">Template:</label>
+                    <select id="template_id" name="template_id" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                        <option value="">-- Zuerst Kampagne wählen --</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full md:w-auto bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded transition-colors whitespace-nowrap">Importieren</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        function updateTemplateSelect() {
+            const campaignId = document.getElementById('source_campaign_id').value;
+            const templateSelect = document.getElementById('template_id');
+
+            templateSelect.innerHTML = '<option value="">Lade...</option>';
+
+            if (!campaignId) {
+                templateSelect.innerHTML = '<option value="">-- Zuerst Kampagne wählen --</option>';
+                return;
+            }
+
+            fetch(`/api/campaign/${campaignId}/templates`)
+                .then(response => response.json())
+                .then(data => {
+                    templateSelect.innerHTML = '<option value="">-- Template wählen --</option>';
+                    data.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = template.name;
+                        templateSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching templates:', error);
+                    templateSelect.innerHTML = '<option value="">Fehler beim Laden</option>';
+                });
+        }
+    </script>
+</body>
+</html>

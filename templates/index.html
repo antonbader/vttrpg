@@ -4,60 +4,101 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TTRPG Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            light: '#b39ddb',
+                            DEFAULT: '#673ab7',
+                            dark: '#311b92',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
 </head>
-<body>
-    <header>
-        <h1>TTRPG Kampagnen-Dashboard</h1>
+<body class="min-h-screen pb-10">
+    <header class="bg-brand-dark text-white p-6 text-center shadow-lg mb-8">
+        <h1 class="text-3xl font-bold">TTRPG Kampagnen-Dashboard</h1>
     </header>
 
-    <main class="container">
-        <section class="create-campaign">
-            <h2>Neue Kampagne erstellen</h2>
+    <main class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <section class="md:col-span-1 bg-gray-800 p-6 rounded-lg shadow-md h-fit border border-gray-700">
+            <h2 class="text-xl font-semibold text-brand-light mb-4 border-b border-gray-700 pb-2">Neue Kampagne erstellen</h2>
             <form action="{{ url_for('create_campaign') }}" method="POST">
-                <div class="form-group">
-                    <label for="name">Kampagnenname:</label>
-                    <input type="text" id="name" name="name" required>
+                <div class="mb-4">
+                    <label for="name" class="block mb-2 font-medium">Kampagnenname:</label>
+                    <input type="text" id="name" name="name" required class="w-full p-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
                 </div>
-                <div class="form-group">
-                    <label for="description">Beschreibung (optional):</label>
-                    <textarea id="description" name="description" rows="3"></textarea>
+                <div class="mb-4">
+                    <label for="description" class="block mb-2 font-medium">Beschreibung (optional):</label>
+                    <textarea id="description" name="description" rows="3" class="w-full p-2 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light"></textarea>
                 </div>
-                <button type="submit" class="btn">Kampagne erstellen</button>
+                <button type="submit" class="w-full bg-brand text-white py-2 rounded hover:bg-brand-light hover:text-gray-900 transition-colors font-medium">Kampagne erstellen</button>
             </form>
         </section>
 
-        <section class="campaign-list">
-            <h2>Deine Kampagnen</h2>
+        <section class="md:col-span-2">
+            <h2 class="text-2xl font-semibold text-brand-light mb-6 border-b border-gray-700 pb-2">Deine Kampagnen</h2>
             {% if campaigns %}
-                <div class="cards">
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     {% for campaign in campaigns %}
-                        <div class="card campaign-card">
-                            <h3>{{ campaign.name }}</h3>
-                            <p class="description">{{ campaign.description if campaign.description else 'Keine Beschreibung.' }}</p>
+                        <div class="bg-gray-800 rounded-lg shadow-md border border-gray-700 p-6 flex flex-col">
+                            <h3 class="text-2xl font-bold text-white mb-2">{{ campaign.name }}</h3>
+                            <p class="text-gray-400 mb-4 flex-grow">{{ campaign.description if campaign.description else 'Keine Beschreibung.' }}</p>
 
-                            <div class="adventures-section">
-                                <h4>Abenteuer</h4>
+                            <div class="mb-4">
+                                <a href="{{ url_for('campaign_library', campaign_id=campaign.id) }}" class="inline-block bg-gray-600 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 transition-colors">📚 Bibliothek öffnen</a>
+                            </div>
+
+                            <div class="bg-gray-900 p-4 rounded-md border border-gray-700">
+                                <h4 class="text-lg font-medium text-gray-200 mb-3 border-b border-gray-800 pb-1">Abenteuer</h4>
                                 {% if campaign.adventures %}
-                                    <ul class="adventure-list">
+                                    <ul class="space-y-4 mb-4">
                                         {% for adventure in campaign.adventures %}
-                                            <li>{{ adventure.name }}</li>
+                                            <li class="bg-gray-800 p-3 rounded border border-gray-700">
+                                                <strong class="text-brand-light block mb-2">{{ adventure.name }}</strong>
+                                                <ul class="space-y-2 ml-2 border-l-2 border-gray-700 pl-3 mb-3">
+                                                    {% for scene in adventure.scenes %}
+                                                        <li class="flex items-center justify-between py-1">
+                                                            <span class="text-sm">
+                                                                {{ scene.name }}
+                                                                {% if scene.is_active %}<span class="text-green-400 text-xs ml-1 font-bold">(Aktiv)</span>{% endif %}
+                                                            </span>
+                                                            <a href="{{ url_for('gm_scene', scene_id=scene.id) }}" class="bg-brand-dark text-white px-3 py-1 rounded text-xs hover:bg-brand transition-colors">GM-Ansicht</a>
+                                                        </li>
+                                                    {% endfor %}
+                                                </ul>
+                                                <form action="{{ url_for('create_scene', adventure_id=adventure.id) }}" method="POST" class="flex gap-2">
+                                                    <input type="text" name="name" placeholder="Neue Szene..." required class="flex-grow p-1 px-2 text-sm bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors whitespace-nowrap">+ Szene</button>
+                                                </form>
+                                            </li>
                                         {% endfor %}
                                     </ul>
                                 {% else %}
-                                    <p class="empty-state">Noch keine Abenteuer.</p>
+                                    <p class="text-gray-500 italic text-sm mb-4">Noch keine Abenteuer.</p>
                                 {% endif %}
 
-                                <form action="{{ url_for('create_adventure', campaign_id=campaign.id) }}" method="POST" class="add-adventure-form">
-                                    <input type="text" name="name" placeholder="Neues Abenteuer..." required>
-                                    <button type="submit" class="btn btn-small">Hinzufügen</button>
+                                <form action="{{ url_for('create_adventure', campaign_id=campaign.id) }}" method="POST" class="flex gap-2 mt-2">
+                                    <input type="text" name="name" placeholder="Neues Abenteuer..." required class="flex-grow p-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                    <button type="submit" class="bg-brand hover:bg-brand-light hover:text-gray-900 text-white px-4 py-2 rounded text-sm transition-colors font-medium">+ Abenteuer</button>
                                 </form>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
             {% else %}
-                <p class="empty-state">Es wurden noch keine Kampagnen angelegt. Beginne mit deiner ersten!</p>
+                <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center">
+                    <p class="text-gray-400 italic">Es wurden noch keine Kampagnen angelegt. Beginne mit deiner ersten!</p>
+                </div>
             {% endif %}
         </section>
     </main>
