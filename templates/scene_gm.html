@@ -24,8 +24,22 @@
     <style>
         body { margin: 0; overflow: hidden; background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         #app-container { display: flex; height: 100vh; }
-        #sidebar { width: 320px; background: #1f2937; padding: 1.5rem; overflow-y: auto; border-right: 1px solid #374151; display: flex; flex-direction: column; gap: 1rem; }
-        #canvas-container { flex-grow: 1; position: relative; overflow: auto; background-color: #000; }
+
+        .sidebar { width: 320px; background: #1f2937; display: flex; flex-direction: column; gap: 1rem; transition: width 0.3s ease; position: relative; flex-shrink: 0; z-index: 40; }
+        .sidebar-content { padding: 1.5rem; width: 320px; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem; box-sizing: border-box; min-height: min-content; height: 100%; transition: opacity 0.2s ease, padding 0.2s ease; }
+        .sidebar.collapsed { width: 0; }
+        .sidebar.collapsed .sidebar-content { padding: 0; opacity: 0; overflow: hidden; }
+        #sidebar-left { border-right: 1px solid #374151; }
+        #sidebar-right { border-left: 1px solid #374151; }
+
+        .toggle-btn { position: absolute; top: 50%; transform: translateY(-50%); background: #374151; color: white; border: 1px solid #4b5563; border-radius: 0.25rem; cursor: pointer; padding: 0.5rem 0.25rem; z-index: 50; display: flex; align-items: center; justify-content: center; }
+        .toggle-btn:hover { background: #4b5563; }
+        #toggle-left { right: -15px; border-radius: 0 0.25rem 0.25rem 0; }
+        #toggle-right { left: -15px; border-radius: 0.25rem 0 0 0.25rem; }
+        .sidebar.collapsed #toggle-left { right: -30px; }
+        .sidebar.collapsed #toggle-right { left: -30px; }
+
+        #canvas-container { flex-grow: 1; position: relative; overflow: hidden; background-color: #000; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .control-group label { display: block; font-size: 0.85em; font-weight: 500; margin-bottom: 0.25rem; color: #d1d5db; }
         .control-group input[type=range] { width: 100%; accent-color: #b39ddb; }
@@ -38,7 +52,8 @@
 </head>
 <body>
     <div id="app-container">
-        <div id="sidebar">
+        <div id="sidebar-left" class="sidebar">
+            <div class="sidebar-content" id="sidebar-left-content">
             <div>
                 <h2 class="text-2xl font-bold text-brand-light mb-1">{{ scene.name }}</h2>
                 <a href="{{ url_for('index') }}" class="text-gray-400 text-sm hover:text-white transition-colors">← Zurück zum Dashboard</a>
@@ -63,24 +78,96 @@
             <div>
                 <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Grid Controls</h3>
                 <div class="control-group mb-3">
-                    <label>Grid Size (px): <span id="grid-size-val" class="text-white">{{ scene.grid_size }}</span></label>
-                    <input type="range" id="grid-size" min="20" max="200" value="{{ scene.grid_size }}">
+                    <label>Grid Size (px):</label>
+                    <div class="flex gap-2">
+                        <input type="range" id="grid-size" min="20" max="200" value="{{ scene.grid_size }}" class="flex-grow">
+                        <input type="number" id="grid-size-num" value="{{ scene.grid_size }}" class="w-16 bg-gray-800 border border-gray-600 rounded p-1 text-white text-xs">
+                    </div>
                 </div>
                 <div class="control-group mb-3">
-                    <label>Offset X: <span id="grid-x-val" class="text-white">{{ scene.grid_offset_x }}</span></label>
-                    <input type="range" id="grid-x" min="-100" max="100" value="{{ scene.grid_offset_x }}">
+                    <label>Offset X:</label>
+                    <div class="flex gap-2">
+                        <input type="range" id="grid-x" min="-100" max="100" value="{{ scene.grid_offset_x }}" class="flex-grow">
+                        <input type="number" id="grid-x-num" value="{{ scene.grid_offset_x }}" class="w-16 bg-gray-800 border border-gray-600 rounded p-1 text-white text-xs">
+                    </div>
                 </div>
                 <div class="control-group mb-3">
-                    <label>Offset Y: <span id="grid-y-val" class="text-white">{{ scene.grid_offset_y }}</span></label>
-                    <input type="range" id="grid-y" min="-100" max="100" value="{{ scene.grid_offset_y }}">
+                    <label>Offset Y:</label>
+                    <div class="flex gap-2">
+                        <input type="range" id="grid-y" min="-100" max="100" value="{{ scene.grid_offset_y }}" class="flex-grow">
+                        <input type="number" id="grid-y-num" value="{{ scene.grid_offset_y }}" class="w-16 bg-gray-800 border border-gray-600 rounded p-1 text-white text-xs">
+                    </div>
+                </div>
+                <div class="control-group mb-3">
+                    <label>Dicke & Farbe:</label>
+                    <div class="flex gap-2">
+                        <input type="number" id="grid-thickness" min="1" max="10" value="{{ scene.grid_thickness or 1 }}" class="w-16 bg-gray-800 border border-gray-600 rounded p-1 text-white text-xs">
+                        <select id="grid-color" class="flex-grow bg-gray-800 border border-gray-600 rounded p-1 text-white text-xs">
+                            <option value="rgba(255, 255, 255, 0.4)" {% if scene.grid_color == 'rgba(255, 255, 255, 0.4)' %}selected{% endif %}>Weiß (Standard)</option>
+                            <option value="rgba(0, 0, 0, 0.6)" {% if scene.grid_color == 'rgba(0, 0, 0, 0.6)' %}selected{% endif %}>Schwarz</option>
+                            <option value="rgba(255, 0, 0, 0.6)" {% if scene.grid_color == 'rgba(255, 0, 0, 0.6)' %}selected{% endif %}>Rot</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="control-group">
-                    <label>Scale (m/square): <span id="grid-scale-val" class="text-white">{{ scene.scale }}</span></label>
+                    <label>Scale (m/square):</label>
                     <input type="number" id="grid-scale" step="0.1" value="{{ scene.scale }}" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-white text-sm focus:outline-none focus:border-brand-light">
                 </div>
             </div>
 
-            <div class="flex-grow overflow-hidden flex flex-col">
+            <div class="mt-2 mb-2 p-2 bg-gray-800 border border-gray-700 rounded" id="token-selection-controls" style="display: none;">
+                <h3 class="font-bold text-brand-light pb-1 mb-2">Token Aktionen</h3>
+                <button id="btn-delete-token" class="w-full py-1.5 bg-red-700 hover:bg-red-600 border border-red-600 rounded text-sm transition-colors text-white">🗑️ Token löschen</button>
+            </div>
+
+            <div class="mt-auto">
+                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Fog of War</h3>
+                <div class="control-group">
+                    <button id="btn-fow-brush" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">🖌️ Brush Aktivieren</button>
+
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-fow-mode-erase" class="flex-1 py-1 bg-brand hover:bg-brand-light border border-gray-600 rounded text-xs text-white">Radieren</button>
+                        <button id="btn-fow-mode-add" class="flex-1 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs text-gray-300">Hinzufügen</button>
+                    </div>
+
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-fow-shape-round" class="flex-1 py-1 bg-brand hover:bg-brand-light border border-gray-600 rounded text-xs text-white">🔴 Rund</button>
+                        <button id="btn-fow-shape-square" class="flex-1 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs text-gray-300">🟥 Quadrat</button>
+                    </div>
+
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-fow-reset" class="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs transition-colors text-gray-300">⬛ Alles Verhüllen</button>
+                        <button id="btn-fow-clear" class="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs transition-colors text-gray-300">⬜ Alles Aufdecken</button>
+                    </div>
+
+                    <label>Brush Size: <span id="fow-brush-val" class="text-white">50</span>px</label>
+                    <input type="range" id="fow-brush-size" min="10" max="200" value="50">
+                </div>
+            </div>
+            </div> <!-- End sidebar-left-content -->
+            <button id="toggle-left" class="toggle-btn" onclick="toggleSidebar('sidebar-left', 'toggle-left', 'left')">◀</button>
+        </div> <!-- End sidebar-left -->
+
+
+        <div id="canvas-container" style="position: relative;">
+            <div id="view-controls" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; display: flex; gap: 5px;">
+                <button id="btn-pan-mode" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Verschieben-Modus (Pan)">✋</button>
+                <button id="btn-zoom-in" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom In">➕</button>
+                <button id="btn-zoom-out" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom Out">➖</button>
+                <button id="btn-zoom-reset" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Reset View">Reset</button>
+            </div>
+
+            <canvas id="bgLayer"></canvas>
+            <canvas id="gridLayer"></canvas>
+            <canvas id="tokenLayer"></canvas>
+            <canvas id="fowLayer" style="opacity: 0.6; pointer-events: none;"></canvas>
+        </div>
+
+        <div id="sidebar-right" class="sidebar">
+            <button id="toggle-right" class="toggle-btn" onclick="toggleSidebar('sidebar-right', 'toggle-right', 'right')">▶</button>
+            <div class="sidebar-content" id="sidebar-right-content">
+                <div class="flex-grow flex flex-col">
+
                 <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Library Templates</h3>
                 <div id="templates-list" class="overflow-y-auto pr-1 space-y-2 pb-2">
                     {% for template in templates %}
@@ -100,35 +187,31 @@
                     {% endif %}
                 </div>
             </div>
-
-            <div class="mt-auto">
-                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Fog of War</h3>
-                <div class="control-group">
-                    <button id="btn-fow-brush" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">🖌️ Brush: Radieren</button>
-                    <div class="flex gap-2 mb-2">
-                        <button id="btn-fow-reset" class="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs transition-colors text-gray-300">⬛ Verhüllen</button>
-                        <button id="btn-fow-clear" class="flex-1 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs transition-colors text-gray-300">⬜ Aufdecken</button>
-                    </div>
-                    <label>Brush Size: <span id="fow-brush-val" class="text-white">50</span>px</label>
-                    <input type="range" id="fow-brush-size" min="10" max="200" value="50">
-                </div>
             </div>
-        </div> <!-- End of sidebar -->
-
-        <div id="canvas-container">
-            <canvas id="bgLayer"></canvas>
-            <canvas id="gridLayer"></canvas>
-            <canvas id="tokenLayer"></canvas>
-            <canvas id="fowLayer" style="opacity: 0.6; pointer-events: none;"></canvas>
         </div>
     </div>
 
     <script>
+        function toggleSidebar(sidebarId, btnId, side) {
+            const sidebar = document.getElementById(sidebarId);
+            const btn = document.getElementById(btnId);
+            sidebar.classList.toggle('collapsed');
+
+            if (sidebar.classList.contains('collapsed')) {
+                btn.innerHTML = side === 'left' ? '▶' : '◀';
+            } else {
+                btn.innerHTML = side === 'left' ? '◀' : '▶';
+            }
+        }
+
         const SCENE_ID = {{ scene.id }};
         let gridSize = {{ scene.grid_size }};
         let gridOffsetX = {{ scene.grid_offset_x }};
         let gridOffsetY = {{ scene.grid_offset_y }};
         let scale = {{ scene.scale }};
+        let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
+        let gridThickness = {{ scene.grid_thickness or 1 }};
+
 
         let tokens = {{ tokens|tojson|safe }};
         let bgImage = new Image();
@@ -152,10 +235,117 @@
             socket.emit('join', {scene_id: SCENE_ID});
         });
 
+
+
+        // --- Pan & Zoom ---
+        const container = document.getElementById('canvas-container');
+        let viewScale = 1.0;
+
+        let viewOffsetX = 0;
+        let viewOffsetY = 0;
+        let isPanMode = false;
+        let isPanning = false;
+        let panStartX = 0;
+        let panStartY = 0;
+
+        function updateViewTransform() {
+            const transformStr = `translate(${viewOffsetX}px, ${viewOffsetY}px) scale(${viewScale})`;
+            bgCanvas.style.transform = transformStr;
+            gridCanvas.style.transform = transformStr;
+            tokenCanvas.style.transform = transformStr;
+            fowCanvas.style.transform = transformStr;
+        }
+
+        document.getElementById('btn-pan-mode').addEventListener('click', (e) => {
+            isPanMode = !isPanMode;
+            e.target.style.backgroundColor = isPanMode ? 'green' : '';
+        });
+
+        function doZoom(delta, mouseX, mouseY) {
+            const oldScale = viewScale;
+            if (delta < 0) {
+                viewScale *= 1.1;
+            } else {
+                viewScale /= 1.1;
+            }
+            viewScale = Math.max(0.1, Math.min(viewScale, 5.0));
+
+            // Adjust offset to zoom centered on mouse
+            const rect = container.getBoundingClientRect();
+            const cx = mouseX !== undefined ? mouseX - rect.left : rect.width / 2;
+            const cy = mouseY !== undefined ? mouseY - rect.top : rect.height / 2;
+
+            viewOffsetX = cx - (cx - viewOffsetX) * (viewScale / oldScale);
+            viewOffsetY = cy - (cy - viewOffsetY) * (viewScale / oldScale);
+
+            updateViewTransform();
+        }
+
+        document.getElementById('btn-zoom-in').addEventListener('click', () => doZoom(-1));
+        document.getElementById('btn-zoom-out').addEventListener('click', () => doZoom(1));
+        document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+            viewScale = 1.0; viewOffsetX = 0; viewOffsetY = 0; updateViewTransform();
+        });
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            doZoom(e.deltaY, e.clientX, e.clientY);
+        });
+
+        container.addEventListener('mousedown', (e) => {
+            if (e.button === 2 || isPanMode) { // Right click or Pan Mode
+                isPanning = true;
+                panStartX = e.clientX - viewOffsetX;
+                panStartY = e.clientY - viewOffsetY;
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                viewOffsetX = e.clientX - panStartX;
+                viewOffsetY = e.clientY - panStartY;
+                updateViewTransform();
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 2 || isPanMode) {
+                isPanning = false;
+            }
+        });
+
+        container.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Touch Pan
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2 || (e.touches.length === 1 && isPanMode)) {
+                isPanning = true;
+                panStartX = e.touches[0].clientX - viewOffsetX;
+                panStartY = e.touches[0].clientY - viewOffsetY;
+            }
+        }, {passive: false});
+
+        container.addEventListener('touchmove', (e) => {
+            if (isPanning) {
+                e.preventDefault();
+                viewOffsetX = e.touches[0].clientX - panStartX;
+                viewOffsetY = e.touches[0].clientY - panStartY;
+                updateViewTransform();
+            }
+        }, {passive: false});
+
+        window.addEventListener('touchend', () => {
+            isPanning = false;
+        });
+
+
         let isFowMode = false;
         let fowBrushSize = 50;
         let isDrawingFow = false;
         let fowMaskData = "{{ scene.fow_mask or '' }}";
+        let fowMode = 'erase'; // 'erase' or 'add'
+        let fowShape = 'round'; // 'round' or 'square'
+
 
         bgImage.onload = () => {
             const w = bgImage.width;
@@ -205,8 +395,8 @@
 
         function drawGrid() {
             gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
-            gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-            gridCtx.lineWidth = 1;
+            gridCtx.strokeStyle = gridColor;
+            gridCtx.lineWidth = gridThickness;
             gridCtx.beginPath();
 
             for (let x = gridOffsetX; x < gridCanvas.width; x += gridSize) {
@@ -243,12 +433,16 @@
                         tokenCtx.drawImage(loadedImages[token.image_path], drawX, drawY, gridSize, gridSize);
                         tokenCtx.restore();
 
+
                         // Border
-                        tokenCtx.strokeStyle = 'black';
+                        tokenCtx.strokeStyle = (selectedToken && selectedToken.id === token.id) ? 'white' : 'black';
+                        if (selectedToken && selectedToken.id === token.id) { tokenCtx.setLineDash([5, 5]); }
                         tokenCtx.lineWidth = 2;
                         tokenCtx.beginPath();
                         tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI * 2, true);
                         tokenCtx.stroke();
+                        tokenCtx.setLineDash([]);
+
                     }
                 } else {
                     let color = 'yellow';
@@ -259,9 +453,12 @@
                     tokenCtx.beginPath();
                     tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI*2);
                     tokenCtx.fill();
-                    tokenCtx.strokeStyle = 'black';
+
+                    tokenCtx.strokeStyle = (selectedToken && selectedToken.id === token.id) ? 'white' : 'black';
+                    if (selectedToken && selectedToken.id === token.id) { tokenCtx.setLineDash([5, 5]); }
                     tokenCtx.lineWidth = 2;
                     tokenCtx.stroke();
+                    tokenCtx.setLineDash([]);
 
                     tokenCtx.fillStyle = color === 'yellow' ? 'black' : 'white';
                     tokenCtx.textAlign = 'center';
@@ -300,31 +497,44 @@
                 grid_size: gridSize,
                 grid_offset_x: gridOffsetX,
                 grid_offset_y: gridOffsetY,
+                grid_color: gridColor,
+                grid_thickness: gridThickness,
                 scale: scale
             });
         }
 
-        document.getElementById('grid-size').addEventListener('input', (e) => {
-            gridSize = parseInt(e.target.value);
-            document.getElementById('grid-size-val').innerText = gridSize;
+        function syncInput(sourceId, targetId, updateVarCb) {
+            const el = document.getElementById(sourceId);
+            el.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value) || 0;
+                document.getElementById(targetId).value = val;
+                updateVarCb(val);
+                drawAll();
+                emitGridUpdate();
+            });
+        }
+
+        syncInput('grid-size', 'grid-size-num', (v) => gridSize = v);
+        syncInput('grid-size-num', 'grid-size', (v) => gridSize = v);
+        syncInput('grid-x', 'grid-x-num', (v) => gridOffsetX = v);
+        syncInput('grid-x-num', 'grid-x', (v) => gridOffsetX = v);
+        syncInput('grid-y', 'grid-y-num', (v) => gridOffsetY = v);
+        syncInput('grid-y-num', 'grid-y', (v) => gridOffsetY = v);
+
+        document.getElementById('grid-thickness').addEventListener('input', (e) => {
+            gridThickness = parseInt(e.target.value) || 1;
             drawAll();
             emitGridUpdate();
         });
-        document.getElementById('grid-x').addEventListener('input', (e) => {
-            gridOffsetX = parseInt(e.target.value);
-            document.getElementById('grid-x-val').innerText = gridOffsetX;
+
+        document.getElementById('grid-color').addEventListener('change', (e) => {
+            gridColor = e.target.value;
             drawAll();
             emitGridUpdate();
         });
-        document.getElementById('grid-y').addEventListener('input', (e) => {
-            gridOffsetY = parseInt(e.target.value);
-            document.getElementById('grid-y-val').innerText = gridOffsetY;
-            drawAll();
-            emitGridUpdate();
-        });
+
         document.getElementById('grid-scale').addEventListener('change', (e) => {
             scale = parseFloat(e.target.value);
-            document.getElementById('grid-scale-val').innerText = scale;
             emitGridUpdate();
         });
 
@@ -342,8 +552,8 @@
             const templateId = e.dataTransfer.getData('template_id');
             if (templateId) {
                 const rect = tokenCanvas.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = (e.clientX - rect.left) / viewScale;
+                const y = (e.clientY - rect.top) / viewScale;
 
                 // Snap
                 const snappedX = Math.floor((x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
@@ -366,6 +576,38 @@
             fowCanvas.style.pointerEvents = isFowMode ? 'auto' : 'none';
         });
 
+        document.getElementById('btn-fow-mode-erase').addEventListener('click', (e) => {
+            fowMode = 'erase';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-fow-mode-add').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-fow-mode-add').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('btn-fow-mode-add').addEventListener('click', (e) => {
+            fowMode = 'add';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-fow-mode-erase').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-fow-mode-erase').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('btn-fow-shape-round').addEventListener('click', (e) => {
+            fowShape = 'round';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-fow-shape-square').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-fow-shape-square').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('btn-fow-shape-square').addEventListener('click', (e) => {
+            fowShape = 'square';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-fow-shape-round').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-fow-shape-round').classList.replace('text-white', 'text-gray-300');
+        });
+
         document.getElementById('btn-fow-reset').addEventListener('click', () => {
             fillFow();
             saveFow();
@@ -383,26 +625,31 @@
 
         // FOW Canvas events
         function drawFowBrush(x, y) {
-            fowCtx.globalCompositeOperation = 'destination-out';
+            fowCtx.globalCompositeOperation = fowMode === 'erase' ? 'destination-out' : 'source-over';
+            fowCtx.fillStyle = 'black'; // for adding fow
             fowCtx.beginPath();
-            fowCtx.arc(x, y, fowBrushSize, 0, Math.PI * 2);
-            fowCtx.fill();
+            if (fowShape === 'round') {
+                fowCtx.arc(x, y, fowBrushSize, 0, Math.PI * 2);
+                fowCtx.fill();
+            } else {
+                fowCtx.fillRect(x - fowBrushSize, y - fowBrushSize, fowBrushSize * 2, fowBrushSize * 2);
+            }
         }
 
         fowCanvas.addEventListener('mousedown', (e) => {
             if (!isFowMode) return;
             isDrawingFow = true;
             const rect = fowCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = (e.clientX - rect.left) / viewScale;
+            const y = (e.clientY - rect.top) / viewScale;
             drawFowBrush(x, y);
         });
 
         fowCanvas.addEventListener('mousemove', (e) => {
             if (!isFowMode || !isDrawingFow) return;
             const rect = fowCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+            const x = (e.clientX - rect.left) / viewScale;
+            const y = (e.clientY - rect.top) / viewScale;
             drawFowBrush(x, y);
         });
 
@@ -416,6 +663,7 @@
 
         // Token Interaction on Canvas
         let dragToken = null;
+        let selectedToken = null;
         let measuring = false;
         let dragStartX = 0;
         let dragStartY = 0;
@@ -423,10 +671,12 @@
         tokenCanvas.addEventListener('mousedown', (e) => {
             if (isFowMode) return;
             const rect = tokenCanvas.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const mouseX = (e.clientX - rect.left) / viewScale;
+            const mouseY = (e.clientY - rect.top) / viewScale;
+
 
             // Find clicked token (reverse order for top-most)
+            let clickedOnToken = false;
             for (let i = tokens.length - 1; i >= 0; i--) {
                 const t = tokens[i];
                 if (mouseX >= t.x && mouseX <= t.x + gridSize &&
@@ -435,16 +685,24 @@
                     dragStartX = t.x;
                     dragStartY = t.y;
                     measuring = true;
+                    selectedToken = t;
+                    clickedOnToken = true;
+                    document.getElementById('token-selection-controls').style.display = 'block';
                     break;
                 }
             }
-        });
+            if (!clickedOnToken) {
+                selectedToken = null;
+                document.getElementById('token-selection-controls').style.display = 'none';
+                drawTokens();
+            }
+});
 
         tokenCanvas.addEventListener('mousemove', (e) => {
             if (dragToken) {
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
+                const mouseX = (e.clientX - rect.left) / viewScale;
+                const mouseY = (e.clientY - rect.top) / viewScale;
 
                 dragToken.x = mouseX - gridSize/2;
                 dragToken.y = mouseY - gridSize/2;
@@ -475,16 +733,19 @@
             gridSize = data.grid_size;
             gridOffsetX = data.grid_offset_x;
             gridOffsetY = data.grid_offset_y;
+            gridColor = data.grid_color || 'rgba(255, 255, 255, 0.4)';
+            gridThickness = data.grid_thickness || 1;
             scale = data.scale;
 
             document.getElementById('grid-size').value = gridSize;
-            document.getElementById('grid-size-val').innerText = gridSize;
+            document.getElementById('grid-size-num').value = gridSize;
             document.getElementById('grid-x').value = gridOffsetX;
-            document.getElementById('grid-x-val').innerText = gridOffsetX;
+            document.getElementById('grid-x-num').value = gridOffsetX;
             document.getElementById('grid-y').value = gridOffsetY;
-            document.getElementById('grid-y-val').innerText = gridOffsetY;
+            document.getElementById('grid-y-num').value = gridOffsetY;
+            document.getElementById('grid-thickness').value = gridThickness;
+            document.getElementById('grid-color').value = gridColor;
             document.getElementById('grid-scale').value = scale;
-            document.getElementById('grid-scale-val').innerText = scale;
 
             drawAll();
         });
@@ -501,6 +762,36 @@
                 t.y = data.y;
                 drawTokens();
             }
+        });
+
+
+        function deleteSelectedToken() {
+            if (selectedToken) {
+                socket.emit('delete_token', { token_id: selectedToken.id });
+                selectedToken = null;
+                document.getElementById('token-selection-controls').style.display = 'none';
+                drawTokens();
+            }
+        }
+
+        document.getElementById('btn-delete-token').addEventListener('click', deleteSelectedToken);
+
+        window.addEventListener('keydown', (e) => {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && selectedToken) {
+                if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                    deleteSelectedToken();
+                }
+            }
+        });
+
+        socket.on('token_deleted', (data) => {
+            tokens = tokens.filter(tk => tk.id !== data.token_id);
+            if (dragToken && dragToken.id === data.token_id) { dragToken = null; measuring = false; }
+            if (selectedToken && selectedToken.id === data.token_id) {
+                selectedToken = null;
+                document.getElementById('token-selection-controls').style.display = 'none';
+            }
+            drawTokens();
         });
 
         socket.on('fow_updated', (data) => {

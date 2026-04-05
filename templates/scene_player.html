@@ -10,7 +10,7 @@
         body { margin: 0; overflow: hidden; background: #000; color: #fff; }
         #app-container { display: flex; height: 100vh; position: relative; }
 
-        #canvas-container { flex-grow: 1; position: relative; overflow: auto; }
+        #canvas-container { flex-grow: 1; position: relative; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 
         /* The player UI overlay */
@@ -34,7 +34,15 @@
             <small style="color: #aaa;">Du kannst nur Token bewegen, die "{{ player_name }}" heißen.</small>
         </div>
 
-        <div id="canvas-container">
+
+        <div id="canvas-container" style="position: relative;">
+            <div id="view-controls" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; display: flex; gap: 5px;">
+                <button id="btn-pan-mode" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Verschieben-Modus (Pan)">✋</button>
+                <button id="btn-zoom-in" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom In">➕</button>
+                <button id="btn-zoom-out" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom Out">➖</button>
+                <button id="btn-zoom-reset" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Reset View">Reset</button>
+            </div>
+
             <canvas id="bgLayer"></canvas>
             <canvas id="gridLayer"></canvas>
             <canvas id="tokenLayer"></canvas>
@@ -52,6 +60,9 @@
         let gridOffsetX = {{ scene.grid_offset_x }};
         let gridOffsetY = {{ scene.grid_offset_y }};
         let scale = {{ scene.scale }};
+        let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
+        let gridThickness = {{ scene.grid_thickness or 1 }};
+
 
         let tokens = {{ tokens|tojson|safe }};
         let bgImage = new Image();
@@ -131,8 +142,8 @@
 
         function drawGrid() {
             gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
-            gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; // less visible for players
-            gridCtx.lineWidth = 1;
+            gridCtx.strokeStyle = gridColor;
+            gridCtx.lineWidth = gridThickness;
             gridCtx.beginPath();
 
             for (let x = gridOffsetX; x < gridCanvas.width; x += gridSize) {
@@ -234,8 +245,8 @@
         if (!IS_DISPLAY) {
             tokenCanvas.addEventListener('mousedown', (e) => {
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
+                const mouseX = (e.clientX - rect.left) / viewScale;
+                const mouseY = (e.clientY - rect.top) / viewScale;
 
                 // Find clicked token (reverse order for top-most)
                 for (let i = tokens.length - 1; i >= 0; i--) {
@@ -259,8 +270,8 @@
             tokenCanvas.addEventListener('mousemove', (e) => {
                 if (dragToken) {
                     const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = e.clientX - rect.left;
-                    const mouseY = e.clientY - rect.top;
+                    const mouseX = (e.clientX - rect.left) / viewScale;
+                    const mouseY = (e.clientY - rect.top) / viewScale;
 
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
@@ -291,8 +302,8 @@
                 if(e.touches.length > 1) return;
                 const touch = e.touches[0];
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = touch.clientX - rect.left;
-                const mouseY = touch.clientY - rect.top;
+                const mouseX = (touch.clientX - rect.left) / viewScale;
+                const mouseY = (touch.clientY - rect.top) / viewScale;
 
                 for (let i = tokens.length - 1; i >= 0; i--) {
                     const t = tokens[i];
@@ -314,8 +325,8 @@
                 if (dragToken) {
                     const touch = e.touches[0];
                     const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = touch.clientX - rect.left;
-                    const mouseY = touch.clientY - rect.top;
+                    const mouseX = (touch.clientX - rect.left) / viewScale;
+                    const mouseY = (touch.clientY - rect.top) / viewScale;
 
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
@@ -347,6 +358,8 @@
             gridSize = data.grid_size;
             gridOffsetX = data.grid_offset_x;
             gridOffsetY = data.grid_offset_y;
+            gridColor = data.grid_color || 'rgba(255, 255, 255, 0.4)';
+            gridThickness = data.grid_thickness || 1;
             scale = data.scale;
             drawAll();
         });
@@ -366,6 +379,15 @@
                 t.y = data.y;
                 drawTokens();
             }
+        });
+
+        socket.on('token_deleted', (data) => {
+            tokens = tokens.filter(tk => tk.id !== data.token_id);
+            if (dragToken && dragToken.id === data.token_id) {
+                dragToken = null;
+                measuring = false;
+            }
+            drawTokens();
         });
 
         socket.on('fow_updated', (data) => {

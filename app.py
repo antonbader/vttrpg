@@ -235,6 +235,8 @@ def handle_update_grid(data):
         scene.grid_size = data.get('grid_size', scene.grid_size)
         scene.grid_offset_x = data.get('grid_offset_x', scene.grid_offset_x)
         scene.grid_offset_y = data.get('grid_offset_y', scene.grid_offset_y)
+        scene.grid_color = data.get('grid_color', scene.grid_color)
+        scene.grid_thickness = data.get('grid_thickness', scene.grid_thickness)
         scene.scale = data.get('scale', scene.scale)
         db.session.commit()
         socketio.emit('grid_updated', data, to=f"scene_{scene_id}")
@@ -282,6 +284,16 @@ def handle_move_token(data):
         token.y = y
         db.session.commit()
         socketio.emit('token_moved', {'token_id': token_id, 'x': x, 'y': y}, to=f"scene_{token.scene_id}")
+
+@socketio.on('delete_token')
+def handle_delete_token(data):
+    token_id = data.get('token_id')
+    token = db.session.get(TokenInstance, token_id)
+    if token:
+        scene_id = token.scene_id
+        db.session.delete(token)
+        db.session.commit()
+        socketio.emit('token_deleted', {'token_id': token_id}, to=f"scene_{scene_id}")
 
 @socketio.on('update_fow')
 def handle_update_fow(data):
