@@ -37,6 +37,47 @@ def create_campaign():
         db.session.commit()
     return redirect(url_for('index'))
 
+@app.route('/campaign/<int:campaign_id>/edit_name', methods=['POST'])
+def edit_campaign_name(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    name = request.form.get('name')
+    if name:
+        campaign.name = name
+        db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/campaign/<int:campaign_id>/delete', methods=['POST'])
+def delete_campaign(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    # We should handle template images if they are not used elsewhere.
+    # A full robust implementation would check if image_path is used by templates in other campaigns.
+    for template in Template.query.filter_by(campaign_id=campaign_id).all():
+        if template.image_path:
+            # Check if this image_path is used by any other template in ANY campaign
+            other_uses = Template.query.filter(Template.image_path == template.image_path, Template.id != template.id).count()
+            if other_uses == 0:
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], template.image_path)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"Error removing token file: {e}")
+
+    # Also delete scene backgrounds
+    for adventure in campaign.adventures:
+        for scene in adventure.scenes:
+            if scene.background_image:
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], scene.background_image)
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"Error removing background file: {e}")
+
+    db.session.delete(campaign)
+    db.session.commit()
+    return redirect(url_for('index'))
+
 @app.route('/campaign/<int:campaign_id>/adventure/create', methods=['POST'])
 def create_adventure(campaign_id):
     name = request.form.get('name')
@@ -46,6 +87,32 @@ def create_adventure(campaign_id):
         db.session.commit()
     return redirect(url_for('index'))
 
+@app.route('/adventure/<int:adventure_id>/edit_name', methods=['POST'])
+def edit_adventure_name(adventure_id):
+    adventure = Adventure.query.get_or_404(adventure_id)
+    name = request.form.get('name')
+    if name:
+        adventure.name = name
+        db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/adventure/<int:adventure_id>/delete', methods=['POST'])
+def delete_adventure(adventure_id):
+    adventure = Adventure.query.get_or_404(adventure_id)
+    # Delete scene backgrounds
+    for scene in adventure.scenes:
+        if scene.background_image:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], scene.background_image)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Error removing background file: {e}")
+
+    db.session.delete(adventure)
+    db.session.commit()
+    return redirect(url_for('index'))
+
 @app.route('/adventure/<int:adventure_id>/scene/create', methods=['POST'])
 def create_scene(adventure_id):
     name = request.form.get('name')
@@ -53,6 +120,31 @@ def create_scene(adventure_id):
         new_scene = Scene(name=name, adventure_id=adventure_id)
         db.session.add(new_scene)
         db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/scene/<int:scene_id>/edit_name', methods=['POST'])
+def edit_scene_name(scene_id):
+    scene = Scene.query.get_or_404(scene_id)
+    name = request.form.get('name')
+    if name:
+        scene.name = name
+        db.session.commit()
+    return redirect(url_for('index'))
+
+@app.route('/scene/<int:scene_id>/delete', methods=['POST'])
+def delete_scene(scene_id):
+    scene = Scene.query.get_or_404(scene_id)
+
+    if scene.background_image:
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], scene.background_image)
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"Error removing background file: {e}")
+
+    db.session.delete(scene)
+    db.session.commit()
     return redirect(url_for('index'))
 
 @app.route('/scene/<int:scene_id>/activate', methods=['POST'])
@@ -365,10 +457,64 @@ def on_join(data):
     room = f"scene_{data['scene_id']}"
     join_room(room)
 
+@app.route('/template/<int:template_id>/edit_name', methods=['POST'])
+def edit_template_name(template_id):
+    template = Template.query.get_or_404(template_id)
+    name = request.form.get('name')
+    if name:
+        template.name = name
+        db.session.commit()
+    return redirect(url_for('campaign_library', campaign_id=template.campaign_id))
+
+@app.route('/template/<int:template_id>/delete', methods=['POST'])
+def delete_template(template_id):
+    template = Template.query.get_or_404(template_id)
+    campaign_id = template.campaign_id
+
+    # Check if this image_path is used by any other template in ANY campaign
+    if template.image_path:
+        other_uses = Template.query.filter(Template.image_path == template.image_path, Template.id != template.id).count()
+        if other_uses == 0:
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], template.image_path)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    print(f"Error removing token file: {e}")
+
+    # Delete all tokens instances of this template
+    TokenInstance.query.filter_by(template_id=template_id).delete()
+
+    db.session.delete(template)
+    db.session.commit()
+
+    return redirect(url_for('campaign_library', campaign_id=campaign_id))
+
+@app.route('/api/reorder', methods=['POST'])
+def reorder_items():
+    data = request.json
+    item_type = data.get('type')
+    items = data.get('items', [])
+
+    if item_type == 'adventure':
+        for idx, item_id in enumerate(items):
+            adventure = Adventure.query.get(item_id)
+            if adventure:
+                adventure.order = idx
+        db.session.commit()
+    elif item_type == 'scene':
+        for idx, item_id in enumerate(items):
+            scene = Scene.query.get(item_id)
+            if scene:
+                scene.order = idx
+        db.session.commit()
+
+    return jsonify({'success': True})
+
 @app.route('/api/campaign/<int:campaign_id>/templates')
 def get_campaign_templates(campaign_id):
     templates = Template.query.filter_by(campaign_id=campaign_id).all()
-    return jsonify([{'id': t.id, 'name': t.name} for t in templates])
+    return jsonify([{'id': t.id, 'name': t.name, 'type': t.type} for t in templates])
 
 @app.route('/campaign/<int:campaign_id>/library/import', methods=['POST'])
 def import_template(campaign_id):

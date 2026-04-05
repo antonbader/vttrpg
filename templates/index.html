@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TTRPG Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -51,7 +52,24 @@
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
                     {% for campaign in campaigns %}
                         <div class="bg-gray-800 rounded-lg shadow-md border border-gray-700 p-6 flex flex-col">
-                            <h3 class="text-2xl font-bold text-white mb-2">{{ campaign.name }}</h3>
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="flex items-center gap-2 w-full">
+                                    <h3 class="text-2xl font-bold text-white campaign-name-display" id="campaign-name-{{ campaign.id }}">{{ campaign.name }}</h3>
+                                    <button onclick="editItem('campaign', {{ campaign.id }})" class="text-gray-400 hover:text-white" title="Namen bearbeiten">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                    </button>
+                                </div>
+                                <form action="{{ url_for('delete_campaign', campaign_id=campaign.id) }}" method="POST" onsubmit="return confirm('Möchtest du diese Kampagne wirklich löschen? Alle zugehörigen Abenteuer, Szenen und Token werden unwiderruflich gelöscht.');">
+                                    <button type="submit" class="text-red-400 hover:text-red-300" title="Kampagne löschen">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 bg-gray-800 rounded-full" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                                    </button>
+                                </form>
+                            </div>
+                            <form action="{{ url_for('edit_campaign_name', campaign_id=campaign.id) }}" method="POST" class="hidden flex gap-2 mb-2" id="campaign-edit-form-{{ campaign.id }}">
+                                <input type="text" name="name" value="{{ campaign.name }}" required class="flex-grow p-1 text-sm bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                <button type="submit" class="bg-brand text-white px-3 rounded text-sm">Speichern</button>
+                                <button type="button" onclick="cancelEdit('campaign', {{ campaign.id }})" class="bg-gray-600 text-white px-3 rounded text-sm">Abbrechen</button>
+                            </form>
                             <p class="text-gray-400 mb-4 flex-grow">{{ campaign.description if campaign.description else 'Keine Beschreibung.' }}</p>
 
                             <div class="mb-4">
@@ -59,38 +77,85 @@
                             </div>
 
                             <div class="bg-gray-900 p-4 rounded-md border border-gray-700">
-                                <h4 class="text-lg font-medium text-gray-200 mb-3 border-b border-gray-800 pb-1">Abenteuer</h4>
-                                {% if campaign.adventures %}
-                                    <ul class="space-y-4 mb-4">
-                                        {% for adventure in campaign.adventures %}
-                                            <li class="bg-gray-800 p-3 rounded border border-gray-700">
-                                                <strong class="text-brand-light block mb-2">{{ adventure.name }}</strong>
-                                                <ul class="space-y-2 ml-2 border-l-2 border-gray-700 pl-3 mb-3">
-                                                    {% for scene in adventure.scenes %}
-                                                        <li class="flex items-center justify-between py-1">
-                                                            <span class="text-sm">
-                                                                {{ scene.name }}
-                                                                {% if scene.is_active %}<span class="text-green-400 text-xs ml-1 font-bold">(Aktiv)</span>{% endif %}
-                                                            </span>
-                                                            <a href="{{ url_for('gm_scene', scene_id=scene.id) }}" class="bg-brand-dark text-white px-3 py-1 rounded text-xs hover:bg-brand transition-colors">GM-Ansicht</a>
-                                                        </li>
-                                                    {% endfor %}
-                                                </ul>
-                                                <form action="{{ url_for('create_scene', adventure_id=adventure.id) }}" method="POST" class="flex gap-2">
-                                                    <input type="text" name="name" placeholder="Neue Szene..." required class="flex-grow p-1 px-2 text-sm bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
-                                                    <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors whitespace-nowrap">+ Szene</button>
-                                                </form>
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
-                                {% else %}
-                                    <p class="text-gray-500 italic text-sm mb-4">Noch keine Abenteuer.</p>
-                                {% endif %}
-
-                                <form action="{{ url_for('create_adventure', campaign_id=campaign.id) }}" method="POST" class="flex gap-2 mt-2">
-                                    <input type="text" name="name" placeholder="Neues Abenteuer..." required class="flex-grow p-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
-                                    <button type="submit" class="bg-brand hover:bg-brand-light hover:text-gray-900 text-white px-4 py-2 rounded text-sm transition-colors font-medium">+ Abenteuer</button>
-                                </form>
+                                <div class="flex justify-between items-center mb-3 border-b border-gray-800 pb-1 cursor-pointer" onclick="toggleCollapse('campaign-adventures-{{ campaign.id }}', this)">
+                                    <h4 class="text-lg font-medium text-gray-200">Abenteuer</h4>
+                                    <span class="text-gray-400 transition-transform duration-200">▶</span>
+                                </div>
+                                <div id="campaign-adventures-{{ campaign.id }}" class="hidden">
+                                    {% if campaign.adventures %}
+                                        <ul class="space-y-4 mb-4 adventure-list" data-campaign-id="{{ campaign.id }}">
+                                            {% for adventure in campaign.adventures %}
+                                                <li class="bg-gray-800 p-3 rounded border border-gray-700 adventure-item" data-id="{{ adventure.id }}">
+                                                    <div class="flex items-center justify-between mb-2">
+                                                        <div class="flex items-center gap-2 flex-grow">
+                                                            <span class="cursor-move text-gray-500 hover:text-gray-300 mr-1" title="Ziehen zum Sortieren">↕</span>
+                                                            <strong class="text-brand-light cursor-pointer flex-grow adventure-name-display" id="adventure-name-{{ adventure.id }}" onclick="toggleCollapse('adventure-scenes-{{ adventure.id }}', this)">
+                                                                <span class="inline-block mr-1 text-xs text-gray-400 transition-transform duration-200">▶</span>
+                                                                {{ adventure.name }}
+                                                            </strong>
+                                                            <button onclick="editItem('adventure', {{ adventure.id }})" class="text-gray-400 hover:text-white" title="Namen bearbeiten">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                            </button>
+                                                        </div>
+                                                        <form action="{{ url_for('delete_adventure', adventure_id=adventure.id) }}" method="POST" onsubmit="return confirm('Möchtest du dieses Abenteuer wirklich löschen? Alle zugehörigen Szenen und Token werden unwiderruflich gelöscht.');">
+                                                            <button type="submit" class="text-red-400 hover:text-red-300" title="Abenteuer löschen">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 bg-gray-800 rounded-full" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                                                            </button>
+                                                        </form>
+                                                    </div>
+                                                    <form action="{{ url_for('edit_adventure_name', adventure_id=adventure.id) }}" method="POST" class="hidden flex gap-1 mb-2" id="adventure-edit-form-{{ adventure.id }}">
+                                                        <input type="text" name="name" value="{{ adventure.name }}" required class="flex-grow p-1 text-sm bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                                        <button type="submit" class="bg-brand text-white px-2 rounded text-xs">✓</button>
+                                                        <button type="button" onclick="cancelEdit('adventure', {{ adventure.id }})" class="bg-gray-600 text-white px-2 rounded text-xs">✗</button>
+                                                    </form>
+                                                    <div id="adventure-scenes-{{ adventure.id }}" class="hidden">
+                                                        <ul class="space-y-2 ml-2 border-l-2 border-gray-700 pl-3 mb-3 scene-list" data-adventure-id="{{ adventure.id }}">
+                                                            {% for scene in adventure.scenes %}
+                                                                <li class="py-1 scene-item" data-id="{{ scene.id }}">
+                                                                    <div class="flex items-center justify-between group">
+                                                                        <div class="flex items-center gap-1 flex-grow">
+                                                                            <span class="cursor-move text-gray-500 hover:text-gray-300 mr-1 text-xs" title="Ziehen zum Sortieren">↕</span>
+                                                                            <span class="text-sm flex-grow scene-name-display" id="scene-name-{{ scene.id }}">
+                                                                                {{ scene.name }}
+                                                                                {% if scene.is_active %}<span class="text-green-400 text-xs ml-1 font-bold">(Aktiv)</span>{% endif %}
+                                                                            </span>
+                                                                            <button onclick="editItem('scene', {{ scene.id }})" class="text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="Namen bearbeiten">
+                                                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                                            </button>
+                                                                        </div>
+                                                                        <div class="flex items-center gap-2">
+                                                                            <a href="{{ url_for('gm_scene', scene_id=scene.id) }}" class="bg-brand-dark text-white px-3 py-1 rounded text-xs hover:bg-brand transition-colors">GM-Ansicht</a>
+                                                                            <form action="{{ url_for('delete_scene', scene_id=scene.id) }}" method="POST" onsubmit="return confirm('Möchtest du diese Szene wirklich löschen? Alle zugehörigen Token werden unwiderruflich gelöscht.');">
+                                                                                <button type="submit" class="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity" title="Szene löschen">
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                                                                                </button>
+                                                                            </form>
+                                                                        </div>
+                                                                    </div>
+                                                                    <form action="{{ url_for('edit_scene_name', scene_id=scene.id) }}" method="POST" class="hidden flex gap-1 mt-1" id="scene-edit-form-{{ scene.id }}">
+                                                                        <input type="text" name="name" value="{{ scene.name }}" required class="w-full p-1 text-xs bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                                                        <button type="submit" class="bg-brand text-white px-2 rounded text-xs">✓</button>
+                                                                        <button type="button" onclick="cancelEdit('scene', {{ scene.id }})" class="bg-gray-600 text-white px-2 rounded text-xs">✗</button>
+                                                                    </form>
+                                                                </li>
+                                                            {% endfor %}
+                                                        </ul>
+                                                        <form action="{{ url_for('create_scene', adventure_id=adventure.id) }}" method="POST" class="flex gap-2 mt-2">
+                                                            <input type="text" name="name" placeholder="Neue Szene..." required class="flex-grow p-1 px-2 text-sm bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                                            <button type="submit" class="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors whitespace-nowrap">+ Szene</button>
+                                                        </form>
+                                                    </div>
+                                                </li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <p class="text-gray-500 italic text-sm mb-4">Noch keine Abenteuer.</p>
+                                    {% endif %}
+                                    <form action="{{ url_for('create_adventure', campaign_id=campaign.id) }}" method="POST" class="flex gap-2 mt-2">
+                                        <input type="text" name="name" placeholder="Neues Abenteuer..." required class="flex-grow p-2 text-sm bg-gray-800 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                        <button type="submit" class="bg-brand hover:bg-brand-light hover:text-gray-900 text-white px-4 py-2 rounded text-sm transition-colors font-medium">+ Abenteuer</button>
+                                    </form>
+                                </div>
                             </div>
                         </div>
                     {% endfor %}
@@ -102,5 +167,68 @@
             {% endif %}
         </section>
     </main>
+
+    <script>
+        function toggleCollapse(id, element) {
+            const el = document.getElementById(id);
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                const icon = element.querySelector('span');
+                if(icon) icon.style.transform = 'rotate(90deg)';
+            } else {
+                el.classList.add('hidden');
+                const icon = element.querySelector('span');
+                if(icon) icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function editItem(type, id) {
+            document.getElementById(`${type}-name-${id}`).classList.add('hidden');
+            document.getElementById(`${type}-edit-form-${id}`).classList.remove('hidden');
+        }
+
+        function cancelEdit(type, id) {
+            document.getElementById(`${type}-name-${id}`).classList.remove('hidden');
+            document.getElementById(`${type}-edit-form-${id}`).classList.add('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Sortable for Adventures
+            document.querySelectorAll('.adventure-list').forEach(function(el) {
+                new Sortable(el, {
+                    animation: 150,
+                    handle: '.cursor-move',
+                    onEnd: function (evt) {
+                        const items = Array.from(evt.to.children).map(li => li.dataset.id);
+                        fetch('/api/reorder', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ type: 'adventure', items: items })
+                        });
+                    }
+                });
+            });
+
+            // Sortable for Scenes
+            document.querySelectorAll('.scene-list').forEach(function(el) {
+                new Sortable(el, {
+                    animation: 150,
+                    handle: '.cursor-move',
+                    onEnd: function (evt) {
+                        const items = Array.from(evt.to.children).map(li => li.dataset.id);
+                        fetch('/api/reorder', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({ type: 'scene', items: items })
+                        });
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>

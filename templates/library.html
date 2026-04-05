@@ -65,23 +65,49 @@
         <section class="md:col-span-2">
             <h2 class="text-2xl font-semibold text-brand-light mb-6 border-b border-gray-700 pb-2">Aktuelle Templates</h2>
             {% if templates %}
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {% for template in templates %}
-                        <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex items-center gap-4">
-                            {% if template.image_path %}
-                                <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" alt="{{ template.name }}" class="w-12 h-12 rounded-full object-cover border border-gray-600">
-                            {% else %}
-                                <div class="w-12 h-12 rounded-full border-2 border-black flex items-center justify-center text-[10px] font-bold overflow-hidden" style="background-color: {% if template.type == 'Player' %}#2563eb{% elif template.type == 'NPC' %}#dc2626{% else %}#eab308{% endif %}; color: {% if template.type == 'Item' %}black{% else %}white{% endif %};">
-                                    {{ template.name[:5] }}
-                                </div>
-                            {% endif %}
-                            <div>
-                                <h3 class="font-bold text-white">{{ template.name }}</h3>
-                                <span class="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">{{ template.type }}</span>
+                {% set types = ['Player', 'NPC', 'Item'] %}
+                {% set type_labels = {'Player': 'Spieler (Player)', 'NPC': 'NPCs', 'Item': 'Gegenstände (Items)'} %}
+
+                {% for t_type in types %}
+                    {% set type_templates = templates | selectattr("type", "equalto", t_type) | list %}
+                    {% if type_templates %}
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-gray-300 mb-3 border-b border-gray-700 pb-1">{{ type_labels[t_type] }}</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {% for template in type_templates %}
+                                    <div class="bg-gray-800 p-4 rounded-lg border border-gray-700 flex items-center gap-4 group relative">
+                                        {% if template.image_path %}
+                                            <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" alt="{{ template.name }}" class="w-12 h-12 rounded-full object-cover border border-gray-600 shrink-0">
+                                        {% else %}
+                                            <div class="w-12 h-12 rounded-full border-2 border-black flex items-center justify-center text-[10px] font-bold overflow-hidden shrink-0" style="background-color: {% if template.type == 'Player' %}#2563eb{% elif template.type == 'NPC' %}#dc2626{% else %}#eab308{% endif %}; color: {% if template.type == 'Item' %}black{% else %}white{% endif %};">
+                                                {{ template.name[:5] }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="flex-grow overflow-hidden">
+                                            <div class="flex items-center gap-2">
+                                                <h4 class="font-bold text-white truncate template-name-display" id="template-name-{{ template.id }}">{{ template.name }}</h4>
+                                                <button onclick="editTemplateName({{ template.id }})" class="text-gray-400 hover:text-white" title="Namen bearbeiten">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                                </button>
+                                            </div>
+                                            <form action="{{ url_for('edit_template_name', template_id=template.id) }}" method="POST" class="hidden flex gap-1 mt-1" id="template-edit-form-{{ template.id }}">
+                                                <input type="text" name="name" value="{{ template.name }}" required class="w-full p-1 text-sm bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light">
+                                                <button type="submit" class="bg-brand text-white px-2 rounded text-xs">✓</button>
+                                                <button type="button" onclick="cancelEditTemplate({{ template.id }})" class="bg-gray-600 text-white px-2 rounded text-xs">✗</button>
+                                            </form>
+                                            <span class="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded inline-block mt-1">{{ template.type }}</span>
+                                        </div>
+                                        <form action="{{ url_for('delete_template', template_id=template.id) }}" method="POST" onsubmit="return confirm('Möchtest du dieses Template wirklich löschen? Wenn es in dieser Kampagne bereits verwendet wird, werden auch die Token von den Karten entfernt.');" class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button type="submit" class="text-red-400 hover:text-red-300" title="Löschen">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 bg-gray-800 rounded-full" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% endfor %}
                             </div>
                         </div>
-                    {% endfor %}
-                </div>
+                    {% endif %}
+                {% endfor %}
             {% else %}
                 <div class="bg-gray-800 p-8 rounded-lg border border-gray-700 text-center mb-8">
                     <p class="text-gray-400 italic">Noch keine Templates in dieser Kampagne.</p>
@@ -179,6 +205,16 @@
             }
         });
 
+        function editTemplateName(templateId) {
+            document.getElementById(`template-name-${templateId}`).classList.add('hidden');
+            document.getElementById(`template-edit-form-${templateId}`).classList.remove('hidden');
+        }
+
+        function cancelEditTemplate(templateId) {
+            document.getElementById(`template-name-${templateId}`).classList.remove('hidden');
+            document.getElementById(`template-edit-form-${templateId}`).classList.add('hidden');
+        }
+
         function updateTemplateSelect() {
             const campaignId = document.getElementById('source_campaign_id').value;
             const templateSelect = document.getElementById('template_id');
@@ -197,7 +233,7 @@
                     data.forEach(template => {
                         const option = document.createElement('option');
                         option.value = template.id;
-                        option.textContent = template.name;
+                        option.textContent = `${template.name} (${template.type})`;
                         templateSelect.appendChild(option);
                     });
                 })
