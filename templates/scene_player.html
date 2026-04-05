@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Szene: {{ scene.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; color: #fff; }
+        #app-container { display: flex; height: 100vh; position: relative; }
+
+        #canvas-container { flex-grow: 1; position: relative; overflow: auto; }
+        canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+        /* The player UI overlay */
+        #player-ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+            z-index: 10;
+            display: {% if is_display %}none{% else %}block{% endif %};
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="player-ui">
+            Eingeloggt als: <strong id="player-name">{{ player_name }}</strong><br>
+            <small style="color: #aaa;">Du kannst nur Token bewegen, die "{{ player_name }}" heißen.</small>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="bgLayer"></canvas>
+            <canvas id="gridLayer"></canvas>
+            <canvas id="tokenLayer"></canvas>
+            <!-- FOW for player is fully black by default. The mask will "cut out" the blackness to reveal below -->
+            <canvas id="fowLayer" style="pointer-events: none;"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const SCENE_ID = {{ scene.id }};
+        const PLAYER_NAME = "{{ player_name }}";
+        const IS_DISPLAY = {{ 'true' if is_display else 'false' }};
+
+        let gridSize = {{ scene.grid_size }};
+        let gridOffsetX = {{ scene.grid_offset_x }};
+        let gridOffsetY = {{ scene.grid_offset_y }};
+        let scale = {{ scene.scale }};
+
+        let tokens = {{ tokens|tojson|safe }};
+        let bgImage = new Image();
+        {% if scene.background_image %}
+            bgImage.src = "{{ url_for('uploaded_file', filename=scene.background_image) }}";
+        {% endif %}
+
+        const bgCanvas = document.getElementById('bgLayer');
+        const gridCanvas = document.getElementById('gridLayer');
+        const tokenCanvas = document.getElementById('tokenLayer');
+        const fowCanvas = document.getElementById('fowLayer');
+
+        const bgCtx = bgCanvas.getContext('2d');
+        const gridCtx = gridCanvas.getContext('2d');
+        const tokenCtx = tokenCanvas.getContext('2d');
+        const fowCtx = fowCanvas.getContext('2d');
+
+        const container = document.getElementById('canvas-container');
+
+        const socket = io();
+        socket.on('connect', () => {
+            socket.emit('join', {scene_id: SCENE_ID});
+        });
+
+        // If the GM changes the active scene, we should reload the player to join the new one
+        socket.on('scene_changed', (data) => {
+            if (IS_DISPLAY) {
+                window.location.reload();
+            } else {
+                window.location.href = `/player/scene/${data.scene_id}?player_name=${PLAYER_NAME}`;
+            }
+        });
+
+        let fowMaskData = "{{ scene.fow_mask or '' }}";
+
+        bgImage.onload = () => {
+            const w = bgImage.width;
+            const h = bgImage.height;
+            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas].forEach(c => {
+                c.width = w;
+                c.height = h;
+            });
+
+            fillFowFullBlack(); // For players, start with full black
+
+            if (fowMaskData) {
+                applyFowMask(fowMaskData);
+            }
+
+            drawAll();
+        };
+
+        function fillFowFullBlack() {
+            fowCtx.globalCompositeOperation = 'source-over';
+            fowCtx.fillStyle = 'black';
+            fowCtx.fillRect(0, 0, fowCanvas.width, fowCanvas.height);
+        }
+
+        function applyFowMask(maskData) {
+            const img = new Image();
+            img.onload = () => {
+                fowCtx.clearRect(0, 0, fowCanvas.width, fowCanvas.height);
+                fowCtx.globalCompositeOperation = 'source-over';
+                fowCtx.drawImage(img, 0, 0);
+            };
+            img.src = maskData;
+        }
+
+        function drawAll() {
+            if(bgImage.src) {
+                bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
+                bgCtx.drawImage(bgImage, 0, 0);
+            }
+            drawGrid();
+            drawTokens();
+        }
+
+        function drawGrid() {
+            gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+            gridCtx.strokeStyle = 'rgba(255, 255, 255, 0.2)'; // less visible for players
+            gridCtx.lineWidth = 1;
+            gridCtx.beginPath();
+
+            for (let x = gridOffsetX; x < gridCanvas.width; x += gridSize) {
+                gridCtx.moveTo(x, 0);
+                gridCtx.lineTo(x, gridCanvas.height);
+            }
+            for (let y = gridOffsetY; y < gridCanvas.height; y += gridSize) {
+                gridCtx.moveTo(0, y);
+                gridCtx.lineTo(gridCanvas.width, y);
+            }
+            gridCtx.stroke();
+        }
+
+        const loadedImages = {};
+
+        function drawTokens() {
+            tokenCtx.clearRect(0, 0, tokenCanvas.width, tokenCanvas.height);
+
+            tokens.forEach(token => {
+                const drawX = token.x;
+                const drawY = token.y;
+
+                if (token.image_path) {
+                    if (!loadedImages[token.image_path]) {
+                        loadedImages[token.image_path] = new Image();
+                        loadedImages[token.image_path].src = token.image_path;
+                        loadedImages[token.image_path].onload = () => drawTokens();
+                    } else if (loadedImages[token.image_path].complete) {
+                        tokenCtx.save();
+                        tokenCtx.beginPath();
+                        tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI * 2, true);
+                        tokenCtx.closePath();
+                        tokenCtx.clip();
+                        tokenCtx.drawImage(loadedImages[token.image_path], drawX, drawY, gridSize, gridSize);
+                        tokenCtx.restore();
+
+                        tokenCtx.strokeStyle = 'black';
+                        if (token.name === PLAYER_NAME && !IS_DISPLAY) {
+                            tokenCtx.strokeStyle = '#00ff00'; // Highlight own token
+                        }
+                        tokenCtx.lineWidth = 2;
+                        tokenCtx.beginPath();
+                        tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI * 2, true);
+                        tokenCtx.stroke();
+                    }
+                } else {
+                    let color = 'yellow';
+                    if (token.type === 'Player') color = 'blue';
+                    if (token.type === 'NPC') color = 'red';
+
+                    tokenCtx.fillStyle = color;
+                    tokenCtx.beginPath();
+                    tokenCtx.arc(drawX + gridSize/2, drawY + gridSize/2, gridSize/2, 0, Math.PI*2);
+                    tokenCtx.fill();
+
+                    tokenCtx.strokeStyle = 'black';
+                    if (token.name === PLAYER_NAME && !IS_DISPLAY) {
+                        tokenCtx.strokeStyle = '#00ff00';
+                    }
+                    tokenCtx.lineWidth = 2;
+                    tokenCtx.stroke();
+
+                    tokenCtx.fillStyle = color === 'yellow' ? 'black' : 'white';
+                    tokenCtx.textAlign = 'center';
+                    tokenCtx.textBaseline = 'middle';
+                    tokenCtx.font = `${Math.max(10, gridSize/4)}px Arial`;
+                    tokenCtx.fillText(token.name.substring(0,5), drawX + gridSize/2, drawY + gridSize/2);
+                }
+            });
+
+            if (measuring && dragToken) {
+                tokenCtx.beginPath();
+                tokenCtx.moveTo(dragStartX + gridSize/2, dragStartY + gridSize/2);
+                tokenCtx.lineTo(dragToken.x + gridSize/2, dragToken.y + gridSize/2);
+                tokenCtx.strokeStyle = 'rgba(0,255,0,0.8)';
+                tokenCtx.lineWidth = 3;
+                tokenCtx.setLineDash([5, 5]);
+                tokenCtx.stroke();
+                tokenCtx.setLineDash([]);
+
+                const dx = dragToken.x - dragStartX;
+                const dy = dragToken.y - dragStartY;
+                const distSquares = Math.sqrt(dx*dx + dy*dy) / gridSize;
+                const distMeters = (distSquares * scale).toFixed(1);
+
+                tokenCtx.fillStyle = 'rgba(0,0,0,0.7)';
+                tokenCtx.fillRect(dragToken.x + gridSize/2 + 10, dragToken.y - 20, 60, 25);
+                tokenCtx.fillStyle = 'white';
+                tokenCtx.fillText(`${distMeters}m`, dragToken.x + gridSize/2 + 40, dragToken.y - 7);
+            }
+        }
+
+        // Token Interaction for Player
+        let dragToken = null;
+        let measuring = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+
+        if (!IS_DISPLAY) {
+            tokenCanvas.addEventListener('mousedown', (e) => {
+                const rect = tokenCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // Find clicked token (reverse order for top-most)
+                for (let i = tokens.length - 1; i >= 0; i--) {
+                    const t = tokens[i];
+                    if (mouseX >= t.x && mouseX <= t.x + gridSize &&
+                        mouseY >= t.y && mouseY <= t.y + gridSize) {
+
+                        // ONLY allow dragging if token name == player name
+                        // Allow dragging if the base name matches (ignore the " 1", " 2" suffixes)
+                        if (t.name.startsWith(PLAYER_NAME)) {
+                            dragToken = t;
+                            dragStartX = t.x;
+                            dragStartY = t.y;
+                            measuring = true;
+                            break;
+                        }
+                    }
+                }
+            });
+
+            tokenCanvas.addEventListener('mousemove', (e) => {
+                if (dragToken) {
+                    const rect = tokenCanvas.getBoundingClientRect();
+                    const mouseX = e.clientX - rect.left;
+                    const mouseY = e.clientY - rect.top;
+
+                    dragToken.x = mouseX - gridSize/2;
+                    dragToken.y = mouseY - gridSize/2;
+                    drawTokens();
+                }
+            });
+
+            window.addEventListener('mouseup', (e) => {
+                if (dragToken) {
+                    // Snap to grid
+                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                    socket.emit('move_token', {
+                        token_id: dragToken.id,
+                        x: dragToken.x,
+                        y: dragToken.y
+                    });
+
+                    dragToken = null;
+                    measuring = false;
+                    drawTokens();
+                }
+            });
+
+            // Touch Support for Mobile
+            tokenCanvas.addEventListener('touchstart', (e) => {
+                if(e.touches.length > 1) return;
+                const touch = e.touches[0];
+                const rect = tokenCanvas.getBoundingClientRect();
+                const mouseX = touch.clientX - rect.left;
+                const mouseY = touch.clientY - rect.top;
+
+                for (let i = tokens.length - 1; i >= 0; i--) {
+                    const t = tokens[i];
+                    if (mouseX >= t.x && mouseX <= t.x + gridSize &&
+                        mouseY >= t.y && mouseY <= t.y + gridSize) {
+                        if (t.name.startsWith(PLAYER_NAME)) {
+                            dragToken = t;
+                            dragStartX = t.x;
+                            dragStartY = t.y;
+                            measuring = true;
+                            e.preventDefault();
+                            break;
+                        }
+                    }
+                }
+            }, {passive: false});
+
+            tokenCanvas.addEventListener('touchmove', (e) => {
+                if (dragToken) {
+                    const touch = e.touches[0];
+                    const rect = tokenCanvas.getBoundingClientRect();
+                    const mouseX = touch.clientX - rect.left;
+                    const mouseY = touch.clientY - rect.top;
+
+                    dragToken.x = mouseX - gridSize/2;
+                    dragToken.y = mouseY - gridSize/2;
+                    drawTokens();
+                    e.preventDefault();
+                }
+            }, {passive: false});
+
+            window.addEventListener('touchend', (e) => {
+                if (dragToken) {
+                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                    socket.emit('move_token', {
+                        token_id: dragToken.id,
+                        x: dragToken.x,
+                        y: dragToken.y
+                    });
+
+                    dragToken = null;
+                    measuring = false;
+                    drawTokens();
+                }
+            });
+        }
+
+        // Sockets receiving
+        socket.on('grid_updated', (data) => {
+            gridSize = data.grid_size;
+            gridOffsetX = data.grid_offset_x;
+            gridOffsetY = data.grid_offset_y;
+            scale = data.scale;
+            drawAll();
+        });
+
+        socket.on('token_added', (token) => {
+            tokens.push(token);
+            drawTokens();
+        });
+
+        socket.on('token_moved', (data) => {
+            const t = tokens.find(tk => tk.id === data.token_id);
+            if (t) {
+                // If we are currently dragging this token locally, ignore the remote update to avoid jitter
+                if (dragToken && dragToken.id === t.id) return;
+
+                t.x = data.x;
+                t.y = data.y;
+                drawTokens();
+            }
+        });
+
+        socket.on('fow_updated', (data) => {
+            if (data.mask) {
+                applyFowMask(data.mask);
+            } else {
+                fillFowFullBlack();
+            }
+        });
+
+    </script>
+</body>
+</html>
