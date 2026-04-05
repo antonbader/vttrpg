@@ -408,6 +408,34 @@
             }
         }
 
+        // Helper function to check if a token is visible (not fully covered by Fog of War)
+        function isTokenVisible(t) {
+            // If there's no FOW mask and the canvas is fully black, it's not visible
+            // But actually we have fowCanvas. We can check pixel data.
+            // Let's get the bounding box of the token.
+            const checkGridStep = 5; // check a pixel every 5 pixels to improve performance
+
+            // To ensure we get correct pixel data, we must check fowCtx.
+            // The fow canvas has the mask where alpha is < 255 if it's cleared.
+            // If the canvas composite is 'source-over' and filled with black,
+            // areas cleared by 'destination-out' will have alpha 0.
+
+            try {
+                // If fowCanvas is completely transparent (no FOW used), it should be visible.
+                // But by default we fill fow with black for players.
+                const imgData = fowCtx.getImageData(t.x, t.y, gridSize, gridSize).data;
+                for (let i = 3; i < imgData.length; i += 4 * checkGridStep) {
+                    if (imgData[i] < 128) { // If alpha is less than 128, it means this pixel is transparent (cleared FOW)
+                        return true;
+                    }
+                }
+                return false; // fully opaque FOW
+            } catch (e) {
+                // Ignore cross-origin errors if any, fallback to visible
+                return true;
+            }
+        }
+
         // Token Interaction for Player
         let dragToken = null;
         let selectedToken = null;
@@ -429,6 +457,11 @@
                     const t = tokens[i];
                     if (mouseX >= t.x && mouseX <= t.x + gridSize &&
                         mouseY >= t.y && mouseY <= t.y + gridSize) {
+
+                        // Check visibility before allowing interaction
+                        if (!isTokenVisible(t)) {
+                            continue; // Token is hidden by Fog of War
+                        }
 
                         selectedToken = t;
                         clickedOnToken = true;

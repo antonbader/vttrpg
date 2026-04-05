@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bibliothek: {{ campaign.name }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -50,7 +52,13 @@
                     <label for="image" class="block mb-2 font-medium text-gray-300">Token Bild (optional):</label>
                     <input type="file" id="image" name="image" accept="image/*" class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600">
                 </div>
-                <button type="submit" class="w-full bg-brand text-white py-2 rounded hover:bg-brand-light hover:text-gray-900 transition-colors font-medium">Template speichern</button>
+                <div class="mb-4 hidden" id="cropper-container">
+                    <label class="block mb-2 font-medium text-gray-300">Bild zuschneiden:</label>
+                    <div class="max-h-64 overflow-hidden rounded bg-gray-900 flex justify-center items-center">
+                        <img id="cropper-image" src="" alt="Vorschau" class="max-w-full max-h-full block">
+                    </div>
+                </div>
+                <button type="submit" id="submit-btn" class="w-full bg-brand text-white py-2 rounded hover:bg-brand-light hover:text-gray-900 transition-colors font-medium">Template speichern</button>
             </form>
         </section>
 
@@ -103,6 +111,74 @@
     </main>
 
     <script>
+        let cropper = null;
+        const imageInput = document.getElementById('image');
+        const cropperContainer = document.getElementById('cropper-container');
+        const cropperImage = document.getElementById('cropper-image');
+        const form = document.querySelector('form');
+        const submitBtn = document.getElementById('submit-btn');
+
+        imageInput.addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                const file = files[0];
+                const url = URL.createObjectURL(file);
+
+                cropperImage.src = url;
+                cropperContainer.classList.remove('hidden');
+
+                if (cropper) {
+                    cropper.destroy();
+                }
+
+                cropper = new Cropper(cropperImage, {
+                    aspectRatio: 1,
+                    viewMode: 1,
+                    background: false,
+                });
+            } else {
+                cropperContainer.classList.add('hidden');
+                if (cropper) {
+                    cropper.destroy();
+                    cropper = null;
+                }
+            }
+        });
+
+        form.addEventListener('submit', function(e) {
+            if (cropper) {
+                e.preventDefault();
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Speichere...';
+
+                cropper.getCroppedCanvas({
+                    width: 256,
+                    height: 256
+                }).toBlob(function(blob) {
+                    const formData = new FormData(form);
+                    // Use original filename or default
+                    const filename = imageInput.files[0].name || 'token.png';
+                    // Override the image input data with the cropped blob
+                    formData.set('image', blob, filename);
+
+                    fetch(form.action, {
+                        method: 'POST',
+                        body: formData
+                    }).then(response => {
+                        if (response.redirected) {
+                            window.location.href = response.url;
+                        } else {
+                            window.location.reload();
+                        }
+                    }).catch(error => {
+                        console.error('Error uploading template:', error);
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = 'Template speichern';
+                    });
+                }, 'image/png');
+            }
+        });
+
         function updateTemplateSelect() {
             const campaignId = document.getElementById('source_campaign_id').value;
             const templateSelect = document.getElementById('template_id');
