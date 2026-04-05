@@ -117,6 +117,40 @@ def upload_scene_bg(scene_id):
         db.session.commit()
     return redirect(url_for('gm_scene', scene_id=scene_id))
 
+@app.route('/scene/<int:scene_id>/delete_bg', methods=['POST'])
+def delete_scene_bg(scene_id):
+    scene = Scene.query.get_or_404(scene_id)
+    if scene.background_image:
+        # Delete file physically
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], scene.background_image)
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except Exception as e:
+                print(f"Error removing background file: {e}")
+        scene.background_image = None
+        db.session.commit()
+        # Optionally, clear the FOW mask and grid sizes, tokens if we need to reset completely?
+        # The prompt says: "Nach dem Löschen soll es wieder so sein, wie wenn die Szene neu angelegt wurde."
+        scene.fow_mask = None
+        scene.grid_size = 50
+        scene.grid_offset_x = 0
+        scene.grid_offset_y = 0
+        scene.scale = 1.5
+        scene.grid_color = 'rgba(255, 255, 255, 0.4)'
+        scene.grid_thickness = 1
+
+        # Delete tokens associated with the scene? "wie wenn die Szene neu angelegt wurde"
+        # The scene would have no background and standard grid
+        TokenInstance.query.filter_by(scene_id=scene_id).delete()
+
+        db.session.commit()
+
+        # We need to broadcast to clients that tokens are gone, fow is cleared, background is gone
+        socketio.emit('scene_reset', {'scene_id': scene_id}, to=f"scene_{scene_id}")
+
+    return redirect(url_for('gm_scene', scene_id=scene_id))
+
 @app.route('/player', methods=['GET', 'POST'])
 def player_login():
     if request.method == 'POST':
