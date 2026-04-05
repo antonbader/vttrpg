@@ -113,10 +113,19 @@
             updateViewTransform();
         }
 
-        document.getElementById('btn-zoom-in').addEventListener('click', () => doZoom(-1));
-        document.getElementById('btn-zoom-out').addEventListener('click', () => doZoom(1));
-        document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+        const btnZoomIn = document.getElementById('btn-zoom-in');
+        if (btnZoomIn) btnZoomIn.addEventListener('click', () => doZoom(-1));
+        const btnZoomOut = document.getElementById('btn-zoom-out');
+        if (btnZoomOut) btnZoomOut.addEventListener('click', () => doZoom(1));
+        const btnZoomReset = document.getElementById('btn-zoom-reset');
+        if (btnZoomReset) btnZoomReset.addEventListener('click', () => {
             viewScale = 1.0; viewOffsetX = 0; viewOffsetY = 0; updateViewTransform();
+        });
+
+        const btnPanMode = document.getElementById('btn-pan-mode');
+        if (btnPanMode) btnPanMode.addEventListener('click', () => {
+            isPanMode = !isPanMode;
+            btnPanMode.style.backgroundColor = isPanMode ? '#4B5563' : 'transparent';
         });
 
         container.addEventListener('wheel', (e) => {
@@ -274,6 +283,7 @@
             }
             drawGrid();
             drawTokens();
+            drawUI();
         }
 
         function drawGrid() {
@@ -546,16 +556,6 @@
                     drawUI();
                 }
             });
-        }
-
-        function drawAll() {
-            if(bgImage.src) {
-                bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
-                bgCtx.drawImage(bgImage, 0, 0);
-            }
-            drawGrid();
-            drawTokens();
-            drawUI();
         }
 
         // Sockets receiving
