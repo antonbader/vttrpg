@@ -48,6 +48,7 @@
             <canvas id="tokenLayer"></canvas>
             <!-- FOW for player is fully black by default. The mask will "cut out" the blackness to reveal below -->
             <canvas id="fowLayer" style="pointer-events: none;"></canvas>
+            <canvas id="uiLayer" style="pointer-events: none;"></canvas>
         </div>
     </div>
 
@@ -56,100 +57,133 @@
         const PLAYER_NAME = "{{ player_name }}";
         const IS_DISPLAY = {{ 'true' if is_display else 'false' }};
 
+        const bgCanvas = document.getElementById('bgLayer');
+        const gridCanvas = document.getElementById('gridLayer');
+        const tokenCanvas = document.getElementById('tokenLayer');
+        const fowCanvas = document.getElementById('fowLayer');
+        const uiCanvas = document.getElementById('uiLayer');
+
+        const bgCtx = bgCanvas.getContext('2d');
+        const gridCtx = gridCanvas.getContext('2d');
+        const tokenCtx = tokenCanvas.getContext('2d');
+        const fowCtx = fowCanvas.getContext('2d');
+        const uiCtx = uiCanvas.getContext('2d');
+
+        const container = document.getElementById('canvas-container');
+
         // --- Pan & Zoom ---
         let viewScale = 1.0;
         let viewOffsetX = 0;
         let viewOffsetY = 0;
+        let isPanMode = false;
         let isPanning = false;
         let panStartX = 0;
         let panStartY = 0;
 
         function updateViewTransform() {
-            // Need to make sure container is defined before using it,
-            // since we declare it lower down in the original script. Let's just find it by ID.
-            const cvsContainer = document.getElementById('canvas-container');
-            if(cvsContainer) {
-                cvsContainer.style.transformOrigin = "0 0";
-                cvsContainer.style.transform = `scale(${viewScale}) translate(${viewOffsetX}px, ${viewOffsetY}px)`;
-            }
+            const transformStr = `translate(${viewOffsetX}px, ${viewOffsetY}px) scale(${viewScale})`;
+            bgCanvas.style.transform = transformStr;
+            gridCanvas.style.transform = transformStr;
+            tokenCanvas.style.transform = transformStr;
+            fowCanvas.style.transform = transformStr;
+            uiCanvas.style.transform = transformStr;
         }
 
-        document.addEventListener("DOMContentLoaded", () => {
-            const btnZoomIn = document.getElementById('btn-zoom-in');
-            const btnZoomOut = document.getElementById('btn-zoom-out');
-            const btnZoomReset = document.getElementById('btn-zoom-reset');
-
-            if(btnZoomIn) {
-                btnZoomIn.addEventListener('click', () => {
-                    viewScale *= 1.2;
-                    updateViewTransform();
-                });
-            }
-
-            if(btnZoomOut) {
-                btnZoomOut.addEventListener('click', () => {
-                    viewScale /= 1.2;
-                    updateViewTransform();
-                });
-            }
-
-            if(btnZoomReset) {
-                btnZoomReset.addEventListener('click', () => {
-                    viewScale = 1.0;
-                    viewOffsetX = 0;
-                    viewOffsetY = 0;
-                    updateViewTransform();
-                });
-            }
-
-            // Middle mouse button or Space+LeftClick to pan
-            let spacePressed = false;
-            document.addEventListener('keydown', (e) => {
-                if (e.code === 'Space') spacePressed = true;
-            });
-            document.addEventListener('keyup', (e) => {
-                if (e.code === 'Space') spacePressed = false;
-            });
-
-            // Use window for panning logic
-            window.addEventListener('mousedown', (e) => {
-                if (e.button === 1 || (e.button === 0 && spacePressed)) {
-                    isPanning = true;
-                    panStartX = e.clientX;
-                    panStartY = e.clientY;
-                    e.preventDefault();
-                }
-            });
-
-            window.addEventListener('mousemove', (e) => {
-                if (isPanning) {
-                    const dx = (e.clientX - panStartX) / viewScale;
-                    const dy = (e.clientY - panStartY) / viewScale;
-                    viewOffsetX += dx;
-                    viewOffsetY += dy;
-                    panStartX = e.clientX;
-                    panStartY = e.clientY;
-                    updateViewTransform();
-                }
-            });
-
-            window.addEventListener('mouseup', (e) => {
-                if (e.button === 1 || (e.button === 0 && spacePressed)) {
-                    isPanning = false;
-                }
-            });
-
-            window.addEventListener('wheel', (e) => {
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                    const zoomFactor = e.deltaY < 0 ? 1.1 : 1/1.1;
-                    // Basic zoom around top-left
-                    viewScale *= zoomFactor;
-                    updateViewTransform();
-                }
-            }, { passive: false });
+        document.getElementById('btn-pan-mode').addEventListener('click', (e) => {
+            isPanMode = !isPanMode;
+            e.target.style.backgroundColor = isPanMode ? 'green' : '';
         });
 
+        function doZoom(delta, mouseX, mouseY) {
+            const oldScale = viewScale;
+            if (delta < 0) {
+                viewScale *= 1.1;
+            } else {
+                viewScale /= 1.1;
+            }
+            viewScale = Math.max(0.1, Math.min(viewScale, 5.0));
+
+            const rect = container.getBoundingClientRect();
+            const cx = mouseX !== undefined ? mouseX - rect.left : rect.width / 2;
+            const cy = mouseY !== undefined ? mouseY - rect.top : rect.height / 2;
+
+            viewOffsetX = cx - (cx - viewOffsetX) * (viewScale / oldScale);
+            viewOffsetY = cy - (cy - viewOffsetY) * (viewScale / oldScale);
+
+            updateViewTransform();
+        }
+
+        document.getElementById('btn-zoom-in').addEventListener('click', () => doZoom(-1));
+        document.getElementById('btn-zoom-out').addEventListener('click', () => doZoom(1));
+        document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+            viewScale = 1.0; viewOffsetX = 0; viewOffsetY = 0; updateViewTransform();
+        });
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            doZoom(e.deltaY, e.clientX, e.clientY);
+        });
+
+        let spacePressed = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                spacePressed = true;
+                container.style.cursor = 'grab';
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                spacePressed = false;
+                container.style.cursor = 'default';
+            }
+        });
+
+        container.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed)) {
+                isPanning = true;
+                panStartX = e.clientX - viewOffsetX;
+                panStartY = e.clientY - viewOffsetY;
+                e.preventDefault();
+            }
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) {
+                viewOffsetX = e.clientX - panStartX;
+                viewOffsetY = e.clientY - panStartY;
+                updateViewTransform();
+            }
+        });
+
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed) || isPanning) {
+                isPanning = false;
+            }
+        });
+
+        container.addEventListener('contextmenu', e => e.preventDefault());
+
+        // Touch Pan
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2 || (e.touches.length === 1 && isPanMode)) {
+                isPanning = true;
+                panStartX = e.touches[0].clientX - viewOffsetX;
+                panStartY = e.touches[0].clientY - viewOffsetY;
+            }
+        }, {passive: false});
+
+        container.addEventListener('touchmove', (e) => {
+            if (isPanning) {
+                e.preventDefault();
+                viewOffsetX = e.touches[0].clientX - panStartX;
+                viewOffsetY = e.touches[0].clientY - panStartY;
+                updateViewTransform();
+            }
+        }, {passive: false});
+
+        window.addEventListener('touchend', () => {
+            isPanning = false;
+        });
 
         let gridSize = {{ scene.grid_size }};
         let gridOffsetX = {{ scene.grid_offset_x }};
@@ -185,9 +219,17 @@
         // If the GM changes the active scene, we should reload the player to join the new one
         socket.on('scene_changed', (data) => {
             if (IS_DISPLAY) {
-                window.location.reload();
+                window.location.href = '/display';
             } else {
                 window.location.href = `/player/scene/${data.scene_id}?player_name=${PLAYER_NAME}`;
+            }
+        });
+
+        socket.on('scene_deactivated', () => {
+            if (IS_DISPLAY) {
+                window.location.href = '/player/waiting';
+            } else {
+                window.location.href = `/player/waiting?player_name=${PLAYER_NAME}`;
             }
         });
 
@@ -196,7 +238,7 @@
         bgImage.onload = () => {
             const w = bgImage.width;
             const h = bgImage.height;
-            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas].forEach(c => {
+            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
                 c.width = w;
                 c.height = h;
             });
@@ -309,45 +351,78 @@
                 }
             });
 
+        }
+
+        function drawUI() {
+            uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+
+            // Draw distance measuring over FOW
             if (measuring && dragToken) {
-                tokenCtx.beginPath();
-                tokenCtx.moveTo(dragStartX + gridSize/2, dragStartY + gridSize/2);
-                tokenCtx.lineTo(dragToken.x + gridSize/2, dragToken.y + gridSize/2);
-                tokenCtx.strokeStyle = 'rgba(0,255,0,0.8)';
-                tokenCtx.lineWidth = 3;
-                tokenCtx.setLineDash([5, 5]);
-                tokenCtx.stroke();
-                tokenCtx.setLineDash([]);
+                uiCtx.beginPath();
+                uiCtx.moveTo(dragStartX + gridSize/2, dragStartY + gridSize/2);
+                uiCtx.lineTo(dragToken.x + gridSize/2, dragToken.y + gridSize/2);
+                uiCtx.strokeStyle = 'rgba(0,255,0,0.8)';
+                uiCtx.lineWidth = 3;
+                uiCtx.setLineDash([5, 5]);
+                uiCtx.stroke();
+                uiCtx.setLineDash([]);
 
                 const dx = dragToken.x - dragStartX;
                 const dy = dragToken.y - dragStartY;
                 const distSquares = Math.sqrt(dx*dx + dy*dy) / gridSize;
                 const distMeters = (distSquares * scale).toFixed(1);
 
-                tokenCtx.fillStyle = 'rgba(0,0,0,0.7)';
-                tokenCtx.fillRect(dragToken.x + gridSize/2 + 10, dragToken.y - 20, 60, 25);
-                tokenCtx.fillStyle = 'white';
-                tokenCtx.fillText(`${distMeters}m`, dragToken.x + gridSize/2 + 40, dragToken.y - 7);
+                uiCtx.fillStyle = 'rgba(0,0,0,0.7)';
+                uiCtx.fillRect(dragToken.x + gridSize/2 + 10, dragToken.y - 20, 60, 25);
+                uiCtx.fillStyle = 'white';
+                uiCtx.font = "14px Arial";
+                uiCtx.textAlign = 'center';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillText(`${distMeters}m`, dragToken.x + gridSize/2 + 40, dragToken.y - 7);
+            }
+
+            // Draw selected token name
+            if (selectedToken) {
+                const drawX = selectedToken.x + gridSize/2;
+                const drawY = selectedToken.y + gridSize + 15;
+
+                uiCtx.font = "bold 14px Arial";
+                uiCtx.textAlign = "center";
+                uiCtx.textBaseline = "middle";
+                const textWidth = uiCtx.measureText(selectedToken.name).width;
+
+                uiCtx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                uiCtx.fillRect(drawX - textWidth/2 - 5, drawY - 10, textWidth + 10, 20);
+
+                uiCtx.fillStyle = "white";
+                uiCtx.fillText(selectedToken.name, drawX, drawY);
             }
         }
 
         // Token Interaction for Player
         let dragToken = null;
+        let selectedToken = null;
         let measuring = false;
         let dragStartX = 0;
         let dragStartY = 0;
 
         if (!IS_DISPLAY) {
-            tokenCanvas.addEventListener('mousedown', (e) => {
+            container.addEventListener('mousedown', (e) => {
+                if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed)) return; // Don't interact with tokens when panning
+
                 const rect = tokenCanvas.getBoundingClientRect();
                 const mouseX = (e.clientX - rect.left) / viewScale;
                 const mouseY = (e.clientY - rect.top) / viewScale;
 
                 // Find clicked token (reverse order for top-most)
+                let clickedOnToken = false;
                 for (let i = tokens.length - 1; i >= 0; i--) {
                     const t = tokens[i];
                     if (mouseX >= t.x && mouseX <= t.x + gridSize &&
                         mouseY >= t.y && mouseY <= t.y + gridSize) {
+
+                        selectedToken = t;
+                        clickedOnToken = true;
 
                         // ONLY allow dragging if token name == player name
                         // Allow dragging if the base name matches (ignore the " 1", " 2" suffixes)
@@ -356,13 +431,19 @@
                             dragStartX = t.x;
                             dragStartY = t.y;
                             measuring = true;
-                            break;
                         }
+                        break;
                     }
                 }
+
+                if (!clickedOnToken) {
+                    selectedToken = null;
+                }
+                drawTokens();
+                drawUI();
             });
 
-            tokenCanvas.addEventListener('mousemove', (e) => {
+            window.addEventListener('mousemove', (e) => {
                 if (dragToken) {
                     const rect = tokenCanvas.getBoundingClientRect();
                     const mouseX = (e.clientX - rect.left) / viewScale;
@@ -371,10 +452,15 @@
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
                     drawTokens();
+                    drawUI();
                 }
             });
 
             window.addEventListener('mouseup', (e) => {
+                if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed) || isPanning) {
+                    isPanning = false;
+                }
+
                 if (dragToken) {
                     // Snap to grid
                     dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
@@ -389,34 +475,47 @@
                     dragToken = null;
                     measuring = false;
                     drawTokens();
+                    drawUI();
                 }
             });
 
             // Touch Support for Mobile
-            tokenCanvas.addEventListener('touchstart', (e) => {
-                if(e.touches.length > 1) return;
+            container.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2 || (e.touches.length === 1 && isPanMode)) return;
+
                 const touch = e.touches[0];
                 const rect = tokenCanvas.getBoundingClientRect();
                 const mouseX = (touch.clientX - rect.left) / viewScale;
                 const mouseY = (touch.clientY - rect.top) / viewScale;
 
+                let clickedOnToken = false;
                 for (let i = tokens.length - 1; i >= 0; i--) {
                     const t = tokens[i];
                     if (mouseX >= t.x && mouseX <= t.x + gridSize &&
                         mouseY >= t.y && mouseY <= t.y + gridSize) {
+
+                        selectedToken = t;
+                        clickedOnToken = true;
+
                         if (t.name.startsWith(PLAYER_NAME)) {
                             dragToken = t;
                             dragStartX = t.x;
                             dragStartY = t.y;
                             measuring = true;
                             e.preventDefault();
-                            break;
                         }
+                        break;
                     }
                 }
+
+                if (!clickedOnToken) {
+                    selectedToken = null;
+                }
+                drawTokens();
+                drawUI();
             }, {passive: false});
 
-            tokenCanvas.addEventListener('touchmove', (e) => {
+            container.addEventListener('touchmove', (e) => {
                 if (dragToken) {
                     const touch = e.touches[0];
                     const rect = tokenCanvas.getBoundingClientRect();
@@ -426,6 +525,7 @@
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
                     drawTokens();
+                    drawUI();
                     e.preventDefault();
                 }
             }, {passive: false});
@@ -444,8 +544,19 @@
                     dragToken = null;
                     measuring = false;
                     drawTokens();
+                    drawUI();
                 }
             });
+        }
+
+        function drawAll() {
+            if(bgImage.src) {
+                bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
+                bgCtx.drawImage(bgImage, 0, 0);
+            }
+            drawGrid();
+            drawTokens();
+            drawUI();
         }
 
         // Sockets receiving
@@ -462,6 +573,7 @@
         socket.on('token_added', (token) => {
             tokens.push(token);
             drawTokens();
+            drawUI();
         });
 
         socket.on('token_moved', (data) => {
@@ -473,6 +585,7 @@
                 t.x = data.x;
                 t.y = data.y;
                 drawTokens();
+                drawUI();
             }
         });
 
@@ -482,7 +595,11 @@
                 dragToken = null;
                 measuring = false;
             }
+            if (selectedToken && selectedToken.id === data.token_id) {
+                selectedToken = null;
+            }
             drawTokens();
+            drawUI();
         });
 
         socket.on('fow_updated', (data) => {

@@ -58,12 +58,17 @@ def create_scene(adventure_id):
 @app.route('/scene/<int:scene_id>/activate', methods=['POST'])
 def activate_scene(scene_id):
     scene = Scene.query.get_or_404(scene_id)
-    # Deactivate all others in the same campaign (or globally depending on scope)
-    # Here we'll just deactivate globally for simplicity, as it's a small app
-    Scene.query.update({Scene.is_active: False})
-    scene.is_active = True
-    db.session.commit()
-    socketio.emit('scene_changed', {'scene_id': scene_id})
+    if scene.is_active:
+        # If it's already active, deactivate it
+        scene.is_active = False
+        db.session.commit()
+        socketio.emit('scene_deactivated')
+    else:
+        # Deactivate all others
+        Scene.query.update({Scene.is_active: False})
+        scene.is_active = True
+        db.session.commit()
+        socketio.emit('scene_changed', {'scene_id': scene_id})
     return redirect(url_for('gm_scene', scene_id=scene_id))
 
 @app.route('/scene/<int:scene_id>/gm')
@@ -122,8 +127,21 @@ def player_login():
             if active_scene:
                 return redirect(url_for('player_view', scene_id=active_scene.id, player_name=player_name))
             else:
-                return "Keine aktive Szene gefunden. Bitte den GM, eine Szene zu aktivieren.", 404
+                return redirect(url_for('waiting', player_name=player_name))
     return render_template('player_login.html')
+
+@app.route('/player/waiting')
+def waiting():
+    player_name = request.args.get('player_name')
+    # If a scene is active, redirect to it
+    active_scene = Scene.query.filter_by(is_active=True).first()
+    if active_scene:
+        if player_name:
+            return redirect(url_for('player_view', scene_id=active_scene.id, player_name=player_name))
+        else:
+            return redirect(url_for('display_view'))
+
+    return render_template('waiting.html', player_name=player_name)
 
 @app.route('/player/scene/<int:scene_id>')
 def player_view(scene_id):
@@ -133,7 +151,7 @@ def player_view(scene_id):
 
     scene = Scene.query.get_or_404(scene_id)
     if not scene.is_active:
-        return "Diese Szene ist nicht mehr aktiv.", 403
+        return redirect(url_for('waiting', player_name=player_name))
 
     tokens = TokenInstance.query.filter_by(scene_id=scene_id).order_by(TokenInstance.id).all()
     tokens_data = []
@@ -165,7 +183,7 @@ def player_view(scene_id):
 def display_view():
     active_scene = Scene.query.filter_by(is_active=True).first()
     if not active_scene:
-        return "Keine aktive Szene gefunden.", 404
+        return redirect(url_for('waiting'))
 
     tokens = TokenInstance.query.filter_by(scene_id=active_scene.id).order_by(TokenInstance.id).all()
     tokens_data = []

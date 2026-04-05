@@ -161,6 +161,7 @@
             <canvas id="gridLayer"></canvas>
             <canvas id="tokenLayer"></canvas>
             <canvas id="fowLayer" style="opacity: 0.6; pointer-events: none;"></canvas>
+            <canvas id="uiLayer" style="pointer-events: none;"></canvas>
         </div>
 
         <div id="sidebar-right" class="sidebar">
@@ -170,18 +171,79 @@
 
                 <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Library Templates</h3>
                 <div id="templates-list" class="overflow-y-auto pr-1 space-y-2 pb-2">
-                    {% for template in templates %}
-                        <div class="template-item" draggable="true" data-template-id="{{ template.id }}">
-                            {% if template.image_path %}
-                                <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" class="token-img-preview">
-                            {% else %}
-                                <div class="token-placeholder" style="background-color: {% if template.type == 'Player' %}#2563eb{% elif template.type == 'NPC' %}#dc2626{% else %}#eab308{% endif %}; color: {% if template.type == 'Item' %}black{% else %}white{% endif %};">
-                                    {{ template.name[:3] }}
+                    {% set player_templates = templates | selectattr("type", "equalto", "Player") | list %}
+                    {% set npc_templates = templates | selectattr("type", "equalto", "NPC") | list %}
+                    {% set item_templates = templates | selectattr("type", "equalto", "Item") | list %}
+
+                    {% if player_templates %}
+                    <details class="group mb-2" open>
+                        <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors">
+                            <span>Players</span>
+                            <span class="transition group-open:rotate-180">▼</span>
+                        </summary>
+                        <div class="mt-2 space-y-2 pl-2 border-l-2 border-gray-700">
+                            {% for template in player_templates %}
+                                <div class="template-item" draggable="true" data-template-id="{{ template.id }}">
+                                    {% if template.image_path %}
+                                        <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" class="token-img-preview">
+                                    {% else %}
+                                        <div class="token-placeholder" style="background-color: #2563eb; color: white;">
+                                            {{ template.name[:3] }}
+                                        </div>
+                                    {% endif %}
+                                    <span class="text-sm font-medium">{{ template.name }}</span>
                                 </div>
-                            {% endif %}
-                            <span class="text-sm font-medium">{{ template.name }}</span>
+                            {% endfor %}
                         </div>
-                    {% endfor %}
+                    </details>
+                    {% endif %}
+
+                    {% if npc_templates %}
+                    <details class="group mb-2" open>
+                        <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors">
+                            <span>NPCs</span>
+                            <span class="transition group-open:rotate-180">▼</span>
+                        </summary>
+                        <div class="mt-2 space-y-2 pl-2 border-l-2 border-gray-700">
+                            {% for template in npc_templates %}
+                                <div class="template-item" draggable="true" data-template-id="{{ template.id }}">
+                                    {% if template.image_path %}
+                                        <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" class="token-img-preview">
+                                    {% else %}
+                                        <div class="token-placeholder" style="background-color: #dc2626; color: white;">
+                                            {{ template.name[:3] }}
+                                        </div>
+                                    {% endif %}
+                                    <span class="text-sm font-medium">{{ template.name }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+
+                    {% if item_templates %}
+                    <details class="group mb-2" open>
+                        <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors">
+                            <span>Items</span>
+                            <span class="transition group-open:rotate-180">▼</span>
+                        </summary>
+                        <div class="mt-2 space-y-2 pl-2 border-l-2 border-gray-700">
+                            {% for template in item_templates %}
+                                <div class="template-item" draggable="true" data-template-id="{{ template.id }}">
+                                    {% if template.image_path %}
+                                        <img src="{{ url_for('uploaded_file', filename=template.image_path) }}" class="token-img-preview">
+                                    {% else %}
+                                        <div class="token-placeholder" style="background-color: #eab308; color: black;">
+                                            {{ template.name[:3] }}
+                                        </div>
+                                    {% endif %}
+                                    <span class="text-sm font-medium">{{ template.name }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </details>
+                    {% endif %}
+
                     {% if not templates %}
                         <p class="text-xs text-gray-500 italic">Keine Templates in der Bibliothek.</p>
                     {% endif %}
@@ -223,10 +285,12 @@
         const gridCanvas = document.getElementById('gridLayer');
         const tokenCanvas = document.getElementById('tokenLayer');
         const fowCanvas = document.getElementById('fowLayer');
+        const uiCanvas = document.getElementById('uiLayer');
         const bgCtx = bgCanvas.getContext('2d');
         const gridCtx = gridCanvas.getContext('2d');
         const tokenCtx = tokenCanvas.getContext('2d');
         const fowCtx = fowCanvas.getContext('2d');
+        const uiCtx = uiCanvas.getContext('2d');
 
         const container = document.getElementById('canvas-container');
 
@@ -253,6 +317,7 @@
             gridCanvas.style.transform = transformStr;
             tokenCanvas.style.transform = transformStr;
             fowCanvas.style.transform = transformStr;
+            uiCanvas.style.transform = transformStr;
         }
 
         document.getElementById('btn-pan-mode').addEventListener('click', (e) => {
@@ -349,7 +414,7 @@
         bgImage.onload = () => {
             const w = bgImage.width;
             const h = bgImage.height;
-            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas].forEach(c => {
+            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
                 c.width = w;
                 c.height = h;
             });
@@ -467,25 +532,52 @@
                 }
             });
 
+            drawUI();
+        }
+
+        function drawUI() {
+            uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+
+            // Draw distance measuring over FOW
             if (measuring && dragToken) {
-                tokenCtx.beginPath();
-                tokenCtx.moveTo(dragStartX + gridSize/2, dragStartY + gridSize/2);
-                tokenCtx.lineTo(dragToken.x + gridSize/2, dragToken.y + gridSize/2);
-                tokenCtx.strokeStyle = 'rgba(255,0,0,0.8)';
-                tokenCtx.lineWidth = 3;
-                tokenCtx.setLineDash([5, 5]);
-                tokenCtx.stroke();
-                tokenCtx.setLineDash([]);
+                uiCtx.beginPath();
+                uiCtx.moveTo(dragStartX + gridSize/2, dragStartY + gridSize/2);
+                uiCtx.lineTo(dragToken.x + gridSize/2, dragToken.y + gridSize/2);
+                uiCtx.strokeStyle = 'rgba(255,0,0,0.8)';
+                uiCtx.lineWidth = 3;
+                uiCtx.setLineDash([5, 5]);
+                uiCtx.stroke();
+                uiCtx.setLineDash([]);
 
                 const dx = dragToken.x - dragStartX;
                 const dy = dragToken.y - dragStartY;
                 const distSquares = Math.sqrt(dx*dx + dy*dy) / gridSize;
                 const distMeters = (distSquares * scale).toFixed(1);
 
-                tokenCtx.fillStyle = 'rgba(0,0,0,0.7)';
-                tokenCtx.fillRect(dragToken.x + gridSize/2 + 10, dragToken.y - 20, 60, 25);
-                tokenCtx.fillStyle = 'white';
-                tokenCtx.fillText(`${distMeters}m`, dragToken.x + gridSize/2 + 40, dragToken.y - 7);
+                uiCtx.fillStyle = 'rgba(0,0,0,0.7)';
+                uiCtx.fillRect(dragToken.x + gridSize/2 + 10, dragToken.y - 20, 60, 25);
+                uiCtx.fillStyle = 'white';
+                uiCtx.font = "14px Arial";
+                uiCtx.textAlign = 'center';
+                uiCtx.textBaseline = 'middle';
+                uiCtx.fillText(`${distMeters}m`, dragToken.x + gridSize/2 + 40, dragToken.y - 7);
+            }
+
+            // Draw selected token name
+            if (selectedToken) {
+                const drawX = selectedToken.x + gridSize/2;
+                const drawY = selectedToken.y + gridSize + 15;
+
+                uiCtx.font = "bold 14px Arial";
+                uiCtx.textAlign = "center";
+                uiCtx.textBaseline = "middle";
+                const textWidth = uiCtx.measureText(selectedToken.name).width;
+
+                uiCtx.fillStyle = "rgba(0, 0, 0, 0.7)";
+                uiCtx.fillRect(drawX - textWidth/2 - 5, drawY - 10, textWidth + 10, 20);
+
+                uiCtx.fillStyle = "white";
+                uiCtx.fillText(selectedToken.name, drawX, drawY);
             }
         }
 
@@ -667,8 +759,8 @@
         let dragStartX = 0;
         let dragStartY = 0;
 
-        tokenCanvas.addEventListener('mousedown', (e) => {
-            if (isFowMode) return;
+        container.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || e.button === 2 || isPanMode || isFowMode) return;
             const rect = tokenCanvas.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left) / viewScale;
             const mouseY = (e.clientY - rect.top) / viewScale;
@@ -693,11 +785,12 @@
             if (!clickedOnToken) {
                 selectedToken = null;
                 document.getElementById('token-selection-controls').style.display = 'none';
-                drawTokens();
             }
-});
+            drawTokens();
+            drawUI();
+        });
 
-        tokenCanvas.addEventListener('mousemove', (e) => {
+        window.addEventListener('mousemove', (e) => {
             if (dragToken) {
                 const rect = tokenCanvas.getBoundingClientRect();
                 const mouseX = (e.clientX - rect.left) / viewScale;
@@ -706,10 +799,11 @@
                 dragToken.x = mouseX - gridSize/2;
                 dragToken.y = mouseY - gridSize/2;
                 drawTokens();
+                drawUI();
             }
         });
 
-        tokenCanvas.addEventListener('mouseup', (e) => {
+        window.addEventListener('mouseup', (e) => {
             if (dragToken) {
                 // Snap to grid
                 dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
@@ -724,6 +818,7 @@
                 dragToken = null;
                 measuring = false;
                 drawTokens();
+                drawUI();
             }
         });
 
@@ -770,6 +865,7 @@
                 selectedToken = null;
                 document.getElementById('token-selection-controls').style.display = 'none';
                 drawTokens();
+                drawUI();
             }
         }
 
@@ -791,6 +887,7 @@
                 document.getElementById('token-selection-controls').style.display = 'none';
             }
             drawTokens();
+            drawUI();
         });
 
         socket.on('fow_updated', (data) => {
