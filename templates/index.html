@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTRPG Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>TTRPG Kampagnen-Dashboard</h1>
+    </header>
+
+    <main class="container">
+        <section class="create-campaign">
+            <h2>Neue Kampagne erstellen</h2>
+            <form action="{{ url_for('create_campaign') }}" method="POST">
+                <div class="form-group">
+                    <label for="name">Kampagnenname:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="description">Beschreibung (optional):</label>
+                    <textarea id="description" name="description" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn">Kampagne erstellen</button>
+            </form>
+        </section>
+
+        <section class="campaign-list">
+            <h2>Deine Kampagnen</h2>
+            {% if campaigns %}
+                <div class="cards">
+                    {% for campaign in campaigns %}
+                        <div class="card campaign-card">
+                            <h3>{{ campaign.name }}</h3>
+                            <p class="description">{{ campaign.description if campaign.description else 'Keine Beschreibung.' }}</p>
+
+                            <div class="adventures-section">
+                                <h4>Abenteuer</h4>
+                                {% if campaign.adventures %}
+                                    <ul class="adventure-list">
+                                        {% for adventure in campaign.adventures %}
+                                            <li>{{ adventure.name }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% else %}
+                                    <p class="empty-state">Noch keine Abenteuer.</p>
+                                {% endif %}
+
+                                <form action="{{ url_for('create_adventure', campaign_id=campaign.id) }}" method="POST" class="add-adventure-form">
+                                    <input type="text" name="name" placeholder="Neues Abenteuer..." required>
+                                    <button type="submit" class="btn btn-small">Hinzufügen</button>
+                                </form>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="empty-state">Es wurden noch keine Kampagnen angelegt. Beginne mit deiner ersten!</p>
+            {% endif %}
+        </section>
+    </main>
+</body>
+</html>
