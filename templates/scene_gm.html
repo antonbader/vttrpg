@@ -83,8 +83,12 @@
                 </div>
             {% endif %}
 
-            <div>
-                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Grid Controls</h3>
+            <details class="group mb-2" open>
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors text-brand-light">
+                    <span>Grid Controls</span>
+                    <span class="transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="mt-2 pl-2 border-l-2 border-gray-700">
                 <div class="control-group mb-3">
                     <label>Grid Size (px):</label>
                     <div class="flex gap-2">
@@ -121,7 +125,8 @@
                     <label>Scale (m/square):</label>
                     <input type="number" id="grid-scale" step="0.1" value="{{ scene.scale }}" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-white text-sm focus:outline-none focus:border-brand-light">
                 </div>
-            </div>
+                </div>
+            </details>
 
             <div class="mt-2 mb-2 p-2 bg-gray-800 border border-gray-700 rounded" id="token-selection-controls" style="display: none;">
                 <h3 class="font-bold text-brand-light pb-1 mb-2">Token Aktionen</h3>
@@ -129,7 +134,12 @@
             </div>
 
             <div class="mt-auto">
-                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Fog of War</h3>
+                <details class="group mb-2" open>
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors text-brand-light">
+                    <span>Fog of War</span>
+                    <span class="transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="mt-2 pl-2 border-l-2 border-gray-700">
                 <div class="control-group">
                     <button id="btn-fow-brush" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">🖌️ Brush Aktivieren</button>
 
@@ -159,6 +169,41 @@
                         <option value="white">Weiß</option>
                     </select>
                 </div>
+                </div>
+                </details>
+
+                <details class="group mb-2" open>
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors text-brand-light">
+                    <span>Paint</span>
+                    <span class="transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="mt-2 pl-2 border-l-2 border-gray-700">
+                <div class="control-group">
+                    <button id="btn-paint-brush" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">🎨 Paint Aktivieren</button>
+
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-paint-mode-draw" class="flex-1 py-1 bg-brand hover:bg-brand-light border border-gray-600 rounded text-xs text-white">Zeichnen</button>
+                        <button id="btn-paint-mode-erase" class="flex-1 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs text-gray-300">Radieren</button>
+                    </div>
+
+                    <div class="flex gap-2 mb-2">
+                        <button id="btn-paint-shape-round" class="flex-1 py-1 bg-brand hover:bg-brand-light border border-gray-600 rounded text-xs text-white">🔴 Rund</button>
+                        <button id="btn-paint-shape-square" class="flex-1 py-1 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded text-xs text-gray-300">🟥 Quadrat</button>
+                    </div>
+
+                    <div class="flex gap-2 mb-2">
+                        <label class="flex-1">Farbe:</label>
+                        <input type="color" id="paint-color" value="#ff0000" class="flex-1 bg-gray-800 border border-gray-600 rounded p-0 text-white h-6 w-full cursor-pointer">
+                    </div>
+
+                    <label>Brush Size: <span id="paint-brush-val" class="text-white">10</span>px</label>
+                    <input type="range" id="paint-brush-size" min="1" max="100" value="10">
+
+                    <button id="btn-paint-clear" class="w-full mt-2 py-1.5 bg-red-700 hover:bg-red-600 border border-red-600 rounded text-xs transition-colors text-white">🗑️ Alles Löschen</button>
+                </div>
+                </div>
+                </details>
+
             </div>
             </div> <!-- End sidebar-left-content -->
             <button id="toggle-left" class="toggle-btn" onclick="toggleSidebar('sidebar-left', 'toggle-left', 'left')">◀</button>
@@ -174,6 +219,7 @@
             </div>
 
             <canvas id="bgLayer"></canvas>
+            <canvas id="paintLayer" style="pointer-events: none;"></canvas>
             <canvas id="gridLayer"></canvas>
             <canvas id="tokenLayer"></canvas>
             <canvas id="fowLayer" style="opacity: 0.6; pointer-events: none;"></canvas>
@@ -298,11 +344,13 @@
         {% endif %}
 
         const bgCanvas = document.getElementById('bgLayer');
+        const paintCanvas = document.getElementById('paintLayer');
         const gridCanvas = document.getElementById('gridLayer');
         const tokenCanvas = document.getElementById('tokenLayer');
         const fowCanvas = document.getElementById('fowLayer');
         const uiCanvas = document.getElementById('uiLayer');
         const bgCtx = bgCanvas.getContext('2d');
+        const paintCtx = paintCanvas.getContext('2d');
         const gridCtx = gridCanvas.getContext('2d');
         const tokenCtx = tokenCanvas.getContext('2d');
         const fowCtx = fowCanvas.getContext('2d');
@@ -330,6 +378,7 @@
         function updateViewTransform() {
             const transformStr = `translate(${viewOffsetX}px, ${viewOffsetY}px) scale(${viewScale})`;
             bgCanvas.style.transform = transformStr;
+            paintCanvas.style.transform = transformStr;
             gridCanvas.style.transform = transformStr;
             tokenCanvas.style.transform = transformStr;
             fowCanvas.style.transform = transformStr;
@@ -429,6 +478,16 @@
         let fowMouseX = -1000;
         let fowMouseY = -1000;
 
+        let isPaintMode = false;
+        let paintBrushSize = 10;
+        let isDrawingPaint = false;
+        let paintMode = 'draw'; // 'draw' or 'erase'
+        let paintShape = 'round'; // 'round' or 'square'
+        let paintColor = '#ff0000';
+        let paintMouseX = -1000;
+        let paintMouseY = -1000;
+        let paintDataStr = "{{ scene.paint_data or '' }}";
+
 
         function initCanvases() {
             let w = window.innerWidth;
@@ -437,10 +496,19 @@
                 w = bgImage.width;
                 h = bgImage.height;
             }
-            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
+            [bgCanvas, paintCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
                 c.width = w;
                 c.height = h;
             });
+
+            if (paintDataStr) {
+                const img = new Image();
+                img.onload = () => {
+                    paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                    paintCtx.drawImage(img, 0, 0);
+                };
+                img.src = paintDataStr;
+            }
 
             if (fowMaskData) {
                 const img = new Image();
@@ -620,6 +688,18 @@
                     uiCtx.arc(fowMouseX, fowMouseY, fowBrushSize, 0, Math.PI * 2);
                 } else {
                     uiCtx.rect(fowMouseX - fowBrushSize, fowMouseY - fowBrushSize, fowBrushSize * 2, fowBrushSize * 2);
+                }
+                uiCtx.stroke();
+            }
+
+            if (isPaintMode && paintMouseX !== -1000 && paintMouseY !== -1000) {
+                uiCtx.strokeStyle = paintMode === 'draw' ? paintColor : 'white';
+                uiCtx.lineWidth = 2;
+                uiCtx.beginPath();
+                if (paintShape === 'round') {
+                    uiCtx.arc(paintMouseX, paintMouseY, paintBrushSize, 0, Math.PI * 2);
+                } else {
+                    uiCtx.rect(paintMouseX - paintBrushSize, paintMouseY - paintBrushSize, paintBrushSize * 2, paintBrushSize * 2);
                 }
                 uiCtx.stroke();
             }
@@ -809,6 +889,11 @@
                 fowMouseY = -1000;
                 drawUI();
             }
+            if (isPaintMode) {
+                paintMouseX = -1000;
+                paintMouseY = -1000;
+                drawUI();
+            }
         });
 
         window.addEventListener('mouseup', () => {
@@ -816,6 +901,140 @@
                 isDrawingFow = false;
                 saveFow();
             }
+            if (isDrawingPaint) {
+                isDrawingPaint = false;
+                savePaint();
+            }
+        });
+
+        // Paint Controls
+        document.getElementById('btn-paint-brush').addEventListener('click', (e) => {
+            isPaintMode = !isPaintMode;
+            e.target.style.backgroundColor = isPaintMode ? 'green' : '';
+            e.target.style.color = isPaintMode ? 'white' : '';
+
+            // To allow drawing on the paint canvas which is below the grid and tokens,
+            // we must make the overlaying canvases ignore pointer events when painting.
+            if (isPaintMode) {
+                gridCanvas.style.pointerEvents = 'none';
+                tokenCanvas.style.pointerEvents = 'none';
+                paintCanvas.style.pointerEvents = 'auto';
+            } else {
+                gridCanvas.style.pointerEvents = 'auto';
+                tokenCanvas.style.pointerEvents = 'auto';
+                paintCanvas.style.pointerEvents = 'none';
+            }
+
+            if (isPaintMode && isFowMode) {
+                document.getElementById('btn-fow-brush').click(); // Turn off FOW
+            }
+            if (!isPaintMode) {
+                paintMouseX = -1000;
+                paintMouseY = -1000;
+            }
+            drawUI();
+        });
+
+        document.getElementById('fow-outline-color').addEventListener('change', (e) => {
+            fowOutlineColor = e.target.value;
+            if (isFowMode) drawUI();
+        });
+        // Modifying fow brush listener so Fow off if Paint on
+        document.getElementById('btn-fow-brush').addEventListener('click', (e) => {
+            if (isFowMode && isPaintMode) {
+                document.getElementById('btn-paint-brush').click();
+            }
+        });
+
+        document.getElementById('btn-paint-mode-draw').addEventListener('click', (e) => {
+            paintMode = 'draw';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-paint-mode-erase').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-paint-mode-erase').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('btn-paint-mode-erase').addEventListener('click', (e) => {
+            paintMode = 'erase';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-paint-mode-draw').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-paint-mode-draw').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('btn-paint-shape-round').addEventListener('click', (e) => {
+            paintShape = 'round';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-paint-shape-square').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-paint-shape-square').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('btn-paint-shape-square').addEventListener('click', (e) => {
+            paintShape = 'square';
+            e.target.classList.replace('bg-gray-800', 'bg-brand');
+            e.target.classList.replace('text-gray-300', 'text-white');
+            document.getElementById('btn-paint-shape-round').classList.replace('bg-brand', 'bg-gray-800');
+            document.getElementById('btn-paint-shape-round').classList.replace('text-white', 'text-gray-300');
+        });
+
+        document.getElementById('paint-color').addEventListener('input', (e) => {
+            paintColor = e.target.value;
+            if (isPaintMode) drawUI();
+        });
+
+        document.getElementById('paint-brush-size').addEventListener('input', (e) => {
+            paintBrushSize = parseInt(e.target.value);
+            document.getElementById('paint-brush-val').innerText = paintBrushSize;
+        });
+
+        function clearPaint() {
+            paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+        }
+
+        function savePaint() {
+            const dataUrl = paintCanvas.toDataURL();
+            socket.emit('update_paint', { scene_id: SCENE_ID, paint_data: dataUrl });
+        }
+
+        document.getElementById('btn-paint-clear').addEventListener('click', () => {
+            clearPaint();
+            savePaint();
+        });
+
+        // Paint Canvas events
+        function drawPaintBrush(x, y) {
+            paintCtx.globalCompositeOperation = paintMode === 'erase' ? 'destination-out' : 'source-over';
+            paintCtx.fillStyle = paintColor;
+            paintCtx.beginPath();
+            if (paintShape === 'round') {
+                paintCtx.arc(x, y, paintBrushSize, 0, Math.PI * 2);
+                paintCtx.fill();
+            } else {
+                paintCtx.fillRect(x - paintBrushSize, y - paintBrushSize, paintBrushSize * 2, paintBrushSize * 2);
+            }
+        }
+
+        paintCanvas.addEventListener('mousedown', (e) => {
+            if (!isPaintMode) return;
+            isDrawingPaint = true;
+            const rect = paintCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / viewScale;
+            const y = (e.clientY - rect.top) / viewScale;
+            drawPaintBrush(x, y);
+        });
+
+        paintCanvas.addEventListener('mousemove', (e) => {
+            if (!isPaintMode) return;
+            const rect = paintCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / viewScale;
+            const y = (e.clientY - rect.top) / viewScale;
+            paintMouseX = x;
+            paintMouseY = y;
+            if (isDrawingPaint) {
+                drawPaintBrush(x, y);
+            }
+            drawUI();
         });
 
 
@@ -827,7 +1046,7 @@
         let dragStartY = 0;
 
         container.addEventListener('mousedown', (e) => {
-            if (e.button === 1 || e.button === 2 || isPanMode || isFowMode) return;
+            if (e.button === 1 || e.button === 2 || isPanMode || isFowMode || isPaintMode) return;
             const rect = tokenCanvas.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left) / viewScale;
             const mouseY = (e.clientY - rect.top) / viewScale;
@@ -967,6 +1186,19 @@
                 img.src = data.mask;
             } else {
                 fillFow();
+            }
+        });
+
+        socket.on('paint_updated', (data) => {
+            if (data.paint_data) {
+                const img = new Image();
+                img.onload = () => {
+                    paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                    paintCtx.drawImage(img, 0, 0);
+                };
+                img.src = data.paint_data;
+            } else {
+                clearPaint();
             }
         });
 

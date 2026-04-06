@@ -44,6 +44,7 @@
             </div>
 
             <canvas id="bgLayer"></canvas>
+            <canvas id="paintLayer" style="pointer-events: none;"></canvas>
             <canvas id="gridLayer"></canvas>
             <canvas id="tokenLayer"></canvas>
             <!-- FOW for player is fully black by default. The mask will "cut out" the blackness to reveal below -->
@@ -58,12 +59,14 @@
         const IS_DISPLAY = {{ 'true' if is_display else 'false' }};
 
         const bgCanvas = document.getElementById('bgLayer');
+        const paintCanvas = document.getElementById('paintLayer');
         const gridCanvas = document.getElementById('gridLayer');
         const tokenCanvas = document.getElementById('tokenLayer');
         const fowCanvas = document.getElementById('fowLayer');
         const uiCanvas = document.getElementById('uiLayer');
 
         const bgCtx = bgCanvas.getContext('2d');
+        const paintCtx = paintCanvas.getContext('2d');
         const gridCtx = gridCanvas.getContext('2d');
         const tokenCtx = tokenCanvas.getContext('2d');
         const fowCtx = fowCanvas.getContext('2d');
@@ -83,6 +86,7 @@
         function updateViewTransform() {
             const transformStr = `translate(${viewOffsetX}px, ${viewOffsetY}px) scale(${viewScale})`;
             bgCanvas.style.transform = transformStr;
+            paintCanvas.style.transform = transformStr;
             gridCanvas.style.transform = transformStr;
             tokenCanvas.style.transform = transformStr;
             fowCanvas.style.transform = transformStr;
@@ -231,6 +235,7 @@
         });
 
         let fowMaskData = "{{ scene.fow_mask or '' }}";
+        let paintDataStr = "{{ scene.paint_data or '' }}";
 
         function initCanvases() {
             let w = window.innerWidth;
@@ -239,10 +244,19 @@
                 w = bgImage.width;
                 h = bgImage.height;
             }
-            [bgCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
+            [bgCanvas, paintCanvas, gridCanvas, tokenCanvas, fowCanvas, uiCanvas].forEach(c => {
                 c.width = w;
                 c.height = h;
             });
+
+            if (paintDataStr) {
+                const img = new Image();
+                img.onload = () => {
+                    paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                    paintCtx.drawImage(img, 0, 0);
+                };
+                img.src = paintDataStr;
+            }
 
             fillFowFullBlack(); // For players, start with full black
 
@@ -639,6 +653,19 @@
                 applyFowMask(data.mask);
             } else {
                 fillFowFullBlack();
+            }
+        });
+
+        socket.on('paint_updated', (data) => {
+            if (data.paint_data) {
+                const img = new Image();
+                img.onload = () => {
+                    paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+                    paintCtx.drawImage(img, 0, 0);
+                };
+                img.src = data.paint_data;
+            } else {
+                paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
             }
         });
 

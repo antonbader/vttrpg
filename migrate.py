@@ -21,6 +21,10 @@ if os.path.exists(db_path):
         print("Adding 'order' column to 'scene' table...")
         cursor.execute("ALTER TABLE scene ADD COLUMN `order` INTEGER DEFAULT 0")
 
+    if 'paint_data' not in columns:
+        print("Adding 'paint_data' column to 'scene' table...")
+        cursor.execute("ALTER TABLE scene ADD COLUMN paint_data TEXT")
+
     conn.commit()
     conn.close()
     print("Migration complete.")
