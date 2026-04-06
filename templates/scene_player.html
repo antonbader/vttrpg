@@ -38,6 +38,7 @@
         <div id="canvas-container" style="position: relative;">
             <div id="view-controls" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
                 <div style="display: flex; gap: 5px;">
+                    <button id="btn-fullscreen" class="bg-gray-700 text-white rounded border border-gray-600 font-bold" style="width: 40px; height: 40px; touch-action: manipulation;" title="Vollbild">⛶</button>
                     <button id="btn-zoom-in" class="bg-gray-700 text-white rounded border border-gray-600 font-bold" style="width: 40px; height: 40px; touch-action: manipulation;" title="Zoom In">➕</button>
                     <button id="btn-zoom-out" class="bg-gray-700 text-white rounded border border-gray-600 font-bold" style="width: 40px; height: 40px; touch-action: manipulation;" title="Zoom Out">➖</button>
                 </div>
@@ -126,6 +127,19 @@
             viewOffsetY = cy - (cy - viewOffsetY) * (viewScale / oldScale);
 
             updateViewTransform();
+        }
+
+        const btnFullscreen = document.getElementById('btn-fullscreen');
+        if (btnFullscreen) {
+            btnFullscreen.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err => {
+                        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+                    });
+                } else {
+                    document.exitFullscreen();
+                }
+            });
         }
 
         const btnZoomIn = document.getElementById('btn-zoom-in');
