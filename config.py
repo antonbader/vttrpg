@@ -11,4 +11,4 @@ SERVER_PORT = 5000
 HOST_URL = "localhost"
 
 # The title of the application displayed on the dashboard and login pages
-APP_TITLE = "TTRPG Kampagnen-Dashboard"
+APP_TITLE = "VTTRPG Engine"
