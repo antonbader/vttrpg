@@ -60,7 +60,7 @@ Um ein vollständiges Backup deiner VTTRPG-Instanz zu erstellen, kopiere einfach
    ```bash
    python app.py
    ```
-   Der Server läuft nun lokal unter `http://0.0.0.0:5000` (abhängig vom eingestellten Port in der `config.py`).
+   Der Server läuft nun lokal unter `http://127.0.0.0:5000` (abhängig vom eingestellten Port in der `config.py`).
 
 3. **Zugriff im lokalen Netzwerk (WLAN):**
    Damit deine Spieler über ihre Smartphones oder Laptops beitreten können:
