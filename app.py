@@ -1,7 +1,9 @@
-from flask import Flask
+from flask import Flask, session
 from flask_socketio import SocketIO
+from functools import wraps
 from models import db
 import os
+import config
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret_ttrpg_key' # In production, use environment variable
@@ -14,7 +16,16 @@ os.makedirs(os.path.join(app.config['UPLOAD_FOLDER'], 'tokens'), exist_ok=True)
 db.init_app(app)
 socketio = SocketIO(app)
 
-from flask import render_template, request, redirect, url_for, send_from_directory
+from flask import render_template, request, redirect, url_for, send_from_directory, flash
+
+# GM Authentication Decorator
+def require_gm(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('gm_logged_in'):
+            return redirect(url_for('gm_login'))
+        return f(*args, **kwargs)
+    return decorated_function
 from werkzeug.utils import secure_filename
 from models import Campaign, Adventure, Template, Scene, TokenInstance
 
@@ -22,12 +33,37 @@ from models import Campaign, Adventure, Template, Scene, TokenInstance
 with app.app_context():
     db.create_all()
 
+@app.route('/gm/login', methods=['GET', 'POST'])
+def gm_login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == config.GM_PASSWORD:
+            session['gm_logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            flash('Falsches Passwort', 'error')
+
+    # Generate absolute links based on config
+    # We construct the base url using HOST_URL and SERVER_PORT
+    base_url = f"http://{config.HOST_URL}:{config.SERVER_PORT}"
+    player_link = f"{base_url}{url_for('player_login')}"
+    display_link = f"{base_url}{url_for('display_view')}"
+
+    return render_template('gm_login.html', player_link=player_link, display_link=display_link)
+
+@app.route('/gm/logout')
+def gm_logout():
+    session.pop('gm_logged_in', None)
+    return redirect(url_for('gm_login'))
+
 @app.route('/')
+@require_gm
 def index():
     campaigns = Campaign.query.all()
     return render_template('index.html', campaigns=campaigns)
 
 @app.route('/campaign/create', methods=['POST'])
+@require_gm
 def create_campaign():
     name = request.form.get('name')
     description = request.form.get('description')
@@ -38,6 +74,7 @@ def create_campaign():
     return redirect(url_for('index'))
 
 @app.route('/campaign/<int:campaign_id>/edit_name', methods=['POST'])
+@require_gm
 def edit_campaign_name(campaign_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     name = request.form.get('name')
@@ -47,6 +84,7 @@ def edit_campaign_name(campaign_id):
     return redirect(url_for('index'))
 
 @app.route('/campaign/<int:campaign_id>/delete', methods=['POST'])
+@require_gm
 def delete_campaign(campaign_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     # We should handle template images if they are not used elsewhere.
@@ -79,6 +117,7 @@ def delete_campaign(campaign_id):
     return redirect(url_for('index'))
 
 @app.route('/campaign/<int:campaign_id>/adventure/create', methods=['POST'])
+@require_gm
 def create_adventure(campaign_id):
     name = request.form.get('name')
     if name:
@@ -88,6 +127,7 @@ def create_adventure(campaign_id):
     return redirect(url_for('index'))
 
 @app.route('/adventure/<int:adventure_id>/edit_name', methods=['POST'])
+@require_gm
 def edit_adventure_name(adventure_id):
     adventure = Adventure.query.get_or_404(adventure_id)
     name = request.form.get('name')
@@ -97,6 +137,7 @@ def edit_adventure_name(adventure_id):
     return redirect(url_for('index'))
 
 @app.route('/adventure/<int:adventure_id>/delete', methods=['POST'])
+@require_gm
 def delete_adventure(adventure_id):
     adventure = Adventure.query.get_or_404(adventure_id)
     # Delete scene backgrounds
@@ -114,6 +155,7 @@ def delete_adventure(adventure_id):
     return redirect(url_for('index'))
 
 @app.route('/adventure/<int:adventure_id>/scene/create', methods=['POST'])
+@require_gm
 def create_scene(adventure_id):
     name = request.form.get('name')
     if name:
@@ -123,6 +165,7 @@ def create_scene(adventure_id):
     return redirect(url_for('index'))
 
 @app.route('/scene/<int:scene_id>/edit_name', methods=['POST'])
+@require_gm
 def edit_scene_name(scene_id):
     scene = Scene.query.get_or_404(scene_id)
     name = request.form.get('name')
@@ -132,6 +175,7 @@ def edit_scene_name(scene_id):
     return redirect(url_for('index'))
 
 @app.route('/scene/<int:scene_id>/delete', methods=['POST'])
+@require_gm
 def delete_scene(scene_id):
     scene = Scene.query.get_or_404(scene_id)
 
@@ -148,6 +192,7 @@ def delete_scene(scene_id):
     return redirect(url_for('index'))
 
 @app.route('/scene/<int:scene_id>/activate', methods=['POST'])
+@require_gm
 def activate_scene(scene_id):
     scene = Scene.query.get_or_404(scene_id)
     if scene.is_active:
@@ -164,6 +209,7 @@ def activate_scene(scene_id):
     return redirect(url_for('gm_scene', scene_id=scene_id))
 
 @app.route('/scene/<int:scene_id>/gm')
+@require_gm
 def gm_scene(scene_id):
     scene = Scene.query.get_or_404(scene_id)
     adventure = Adventure.query.get(scene.adventure_id)
@@ -198,6 +244,7 @@ def gm_scene(scene_id):
     return render_template('scene_gm.html', scene=scene, campaign=campaign, templates=templates, tokens=tokens_data)
 
 @app.route('/scene/<int:scene_id>/upload_bg', methods=['POST'])
+@require_gm
 def upload_scene_bg(scene_id):
     scene = Scene.query.get_or_404(scene_id)
     image = request.files.get('background')
@@ -210,6 +257,7 @@ def upload_scene_bg(scene_id):
     return redirect(url_for('gm_scene', scene_id=scene_id))
 
 @app.route('/scene/<int:scene_id>/delete_bg', methods=['POST'])
+@require_gm
 def delete_scene_bg(scene_id):
     scene = Scene.query.get_or_404(scene_id)
     if scene.background_image:
@@ -343,6 +391,7 @@ def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/campaign/<int:campaign_id>/library')
+@require_gm
 def campaign_library(campaign_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     templates = Template.query.filter_by(campaign_id=campaign_id).all()
@@ -350,6 +399,7 @@ def campaign_library(campaign_id):
     return render_template('library.html', campaign=campaign, templates=templates, other_campaigns=other_campaigns)
 
 @app.route('/campaign/<int:campaign_id>/library/template/create', methods=['POST'])
+@require_gm
 def create_template(campaign_id):
     name = request.form.get('name')
     type = request.form.get('type')
@@ -470,6 +520,7 @@ def on_join(data):
     join_room(room)
 
 @app.route('/template/<int:template_id>/edit_name', methods=['POST'])
+@require_gm
 def edit_template_name(template_id):
     template = Template.query.get_or_404(template_id)
     name = request.form.get('name')
@@ -479,6 +530,7 @@ def edit_template_name(template_id):
     return redirect(url_for('campaign_library', campaign_id=template.campaign_id))
 
 @app.route('/template/<int:template_id>/delete', methods=['POST'])
+@require_gm
 def delete_template(template_id):
     template = Template.query.get_or_404(template_id)
     campaign_id = template.campaign_id
@@ -503,6 +555,7 @@ def delete_template(template_id):
     return redirect(url_for('campaign_library', campaign_id=campaign_id))
 
 @app.route('/api/reorder', methods=['POST'])
+@require_gm
 def reorder_items():
     data = request.json
     item_type = data.get('type')
@@ -524,11 +577,13 @@ def reorder_items():
     return jsonify({'success': True})
 
 @app.route('/api/campaign/<int:campaign_id>/templates')
+@require_gm
 def get_campaign_templates(campaign_id):
     templates = Template.query.filter_by(campaign_id=campaign_id).all()
     return jsonify([{'id': t.id, 'name': t.name, 'type': t.type} for t in templates])
 
 @app.route('/campaign/<int:campaign_id>/library/import', methods=['POST'])
+@require_gm
 def import_template(campaign_id):
     source_campaign_id = request.form.get('source_campaign_id')
     template_id = request.form.get('template_id')
@@ -548,4 +603,5 @@ def import_template(campaign_id):
     return redirect(url_for('campaign_library', campaign_id=campaign_id))
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+    port = int(config.SERVER_PORT)
+    socketio.run(app, debug=True, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)

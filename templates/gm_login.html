@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spielleiter Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            light: '#b39ddb',
+                            DEFAULT: '#673ab7',
+                            dark: '#311b92',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #121212; color: #e0e0e0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center">
+    <div class="bg-gray-800 p-8 rounded-lg shadow-xl border border-gray-700 w-full max-w-md text-center">
+        <h1 class="text-3xl font-bold text-brand-light mb-6">Spielleiter Login</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="mb-4 p-3 rounded {% if category == 'error' %}bg-red-900 border border-red-700 text-red-200{% else %}bg-green-900 border border-green-700 text-green-200{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" class="mb-6">
+            <div class="mb-4 text-left">
+                <label for="password" class="block mb-2 font-medium text-gray-300">Passwort:</label>
+                <input type="password" id="password" name="password" required autofocus class="w-full p-3 bg-gray-900 border border-gray-600 rounded text-white focus:outline-none focus:border-brand-light text-center text-lg">
+            </div>
+            <button type="submit" class="w-full bg-brand text-white py-3 rounded hover:bg-brand-light hover:text-gray-900 transition-colors font-bold text-lg">Anmelden</button>
+        </form>
+
+        <div class="border-t border-gray-700 pt-6 mt-6">
+            <h2 class="text-lg font-medium text-gray-400 mb-4">Weitere Zugänge</h2>
+            <div class="flex flex-col gap-3">
+                <a href="{{ player_link }}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors" target="_blank">Spieler Login</a>
+                <a href="{{ display_link }}" class="bg-gray-700 hover:bg-gray-600 text-white py-2 px-4 rounded transition-colors" target="_blank">Zweiter Bildschirm (Display)</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
