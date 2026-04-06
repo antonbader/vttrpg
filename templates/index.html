@@ -175,10 +175,12 @@
                 el.classList.remove('hidden');
                 const icon = element.querySelector('span');
                 if(icon) icon.style.transform = 'rotate(90deg)';
+                localStorage.setItem(id, 'open');
             } else {
                 el.classList.add('hidden');
                 const icon = element.querySelector('span');
                 if(icon) icon.style.transform = 'rotate(0deg)';
+                localStorage.removeItem(id);
             }
         }
 
@@ -193,6 +195,31 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Restore collapse states
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith('campaign-adventures-') || key.startsWith('adventure-scenes-')) {
+                    const el = document.getElementById(key);
+                    if (el && localStorage.getItem(key) === 'open') {
+                        el.classList.remove('hidden');
+                        // Find the toggle element to rotate its icon
+                        // For campaigns, it's the div preceding it. For adventures, it's the strong tag
+                        let toggleElement = null;
+                        if (key.startsWith('campaign-adventures-')) {
+                            toggleElement = el.previousElementSibling;
+                        } else if (key.startsWith('adventure-scenes-')) {
+                            const adventureId = key.split('-')[2];
+                            toggleElement = document.getElementById(`adventure-name-${adventureId}`);
+                        }
+
+                        if (toggleElement) {
+                            const icon = toggleElement.querySelector('span');
+                            if (icon) icon.style.transform = 'rotate(90deg)';
+                        }
+                    }
+                }
+            }
+
             // Sortable for Adventures
             document.querySelectorAll('.adventure-list').forEach(function(el) {
                 new Sortable(el, {
