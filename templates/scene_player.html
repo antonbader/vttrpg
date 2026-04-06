@@ -109,11 +109,6 @@
             uiCanvas.style.transform = transformStr;
         }
 
-        document.getElementById('btn-pan-mode').addEventListener('click', (e) => {
-            isPanMode = !isPanMode;
-            e.target.style.backgroundColor = isPanMode ? 'green' : '';
-        });
-
         function doZoom(delta, mouseX, mouseY) {
             const oldScale = viewScale;
             if (delta < 0) {
@@ -334,6 +329,7 @@
             }
 
             drawAll();
+            updateViewTransform(); // Ensure transform is applied initially
         }
 
         if (bgImage.src) {
@@ -350,9 +346,18 @@
         }
 
         function applyFowMask(maskData) {
+            if (!maskData) {
+                fillFowFullBlack();
+                return;
+            }
             const img = new Image();
             img.onload = () => {
                 fowCtx.clearRect(0, 0, fowCanvas.width, fowCanvas.height);
+                // The incoming mask from GM is already correctly formatted (transparent = visible).
+                // Wait, if it's from GM, the GM's FOW canvas is drawn as black over transparent.
+                // Or rather, the mask data is the image. Let's just draw it directly, but wait, the player needs it to be black where it's masked.
+                // The GM canvas is black with transparent holes where FOW is cleared.
+                // So drawing it over a clear canvas is exactly what we need.
                 fowCtx.globalCompositeOperation = 'source-over';
                 fowCtx.drawImage(img, 0, 0);
             };
