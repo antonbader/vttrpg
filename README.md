@@ -1,4 +1,4 @@
-# VTTRPG (Virtual Tabletop RPG Engine)
+# VTTRPGE (Virtual Tabletop RPG Engine)
 
 Eine leichtgewichtige, webbasierte Engine für Pen & Paper Rollenspiele, entwickelt mit Python (Flask) und Flask-SocketIO.
 
