@@ -6,18 +6,20 @@ class Campaign(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    adventures = db.relationship('Adventure', backref='campaign', lazy=True, cascade="all, delete-orphan")
+    adventures = db.relationship('Adventure', backref='campaign', lazy=True, cascade="all, delete-orphan", order_by="Adventure.order")
 
 class Adventure(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     campaign_id = db.Column(db.Integer, db.ForeignKey('campaign.id'), nullable=False)
-    scenes = db.relationship('Scene', backref='adventure', lazy=True, cascade="all, delete-orphan")
+    order = db.Column(db.Integer, default=0)
+    scenes = db.relationship('Scene', backref='adventure', lazy=True, cascade="all, delete-orphan", order_by="Scene.order")
 
 class Scene(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     adventure_id = db.Column(db.Integer, db.ForeignKey('adventure.id'), nullable=False)
+    order = db.Column(db.Integer, default=0)
     tokens = db.relationship('TokenInstance', backref='scene', lazy=True, cascade="all, delete-orphan")
     background_image = db.Column(db.String(255), nullable=True)
     fow_mask = db.Column(db.Text, nullable=True) # Base64 encoded or path to mask
