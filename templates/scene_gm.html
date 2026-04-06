@@ -124,9 +124,14 @@
                         </select>
                     </div>
                 </div>
-                <div class="control-group">
+                <div class="control-group mb-3">
                     <label>Scale (m/square):</label>
                     <input type="number" id="grid-scale" step="0.1" value="{{ scene.scale }}" class="w-full bg-gray-800 border border-gray-600 rounded p-1 text-white text-sm focus:outline-none focus:border-brand-light">
+                </div>
+                <div class="control-group">
+                    <button id="btn-snap-grid" class="w-full py-1.5 border rounded text-sm transition-colors {% if scene.snap_to_grid %}bg-brand hover:bg-brand-light border-brand text-white{% else %}bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300{% endif %}">
+                        {% if scene.snap_to_grid %}🧲 Snap to Grid: ON{% else %}🧲 Snap to Grid: OFF{% endif %}
+                    </button>
                 </div>
                 </div>
             </details>
@@ -341,7 +346,7 @@
         let scale = {{ scene.scale or 1.5 }};
         let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
         let gridThickness = {{ scene.grid_thickness or 1 }};
-
+        let snapToGrid = {{ 'true' if scene.snap_to_grid else 'false' }};
 
         let tokens = {{ tokens|tojson|safe }};
         let bgImage = new Image();
@@ -720,9 +725,23 @@
                 grid_offset_y: gridOffsetY,
                 grid_color: gridColor,
                 grid_thickness: gridThickness,
-                scale: scale
+                scale: scale,
+                snap_to_grid: snapToGrid
             });
         }
+
+        document.getElementById('btn-snap-grid').addEventListener('click', (e) => {
+            snapToGrid = !snapToGrid;
+            const btn = e.target;
+            if (snapToGrid) {
+                btn.className = "w-full py-1.5 border rounded text-sm transition-colors bg-brand hover:bg-brand-light border-brand text-white";
+                btn.innerText = "🧲 Snap to Grid: ON";
+            } else {
+                btn.className = "w-full py-1.5 border rounded text-sm transition-colors bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300";
+                btn.innerText = "🧲 Snap to Grid: OFF";
+            }
+            emitGridUpdate();
+        });
 
         function syncInput(sourceId, targetId, updateVarCb) {
             const el = document.getElementById(sourceId);
@@ -821,15 +840,19 @@
                 const x = (e.clientX - rect.left) / viewScale;
                 const y = (e.clientY - rect.top) / viewScale;
 
-                // Snap
-                const snappedX = Math.floor((x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                const snappedY = Math.floor((y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                let finalX = x - gridSize / 2;
+                let finalY = y - gridSize / 2;
+
+                if (snapToGrid) {
+                    finalX = Math.floor((x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    finalY = Math.floor((y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                }
 
                 socket.emit('add_token', {
                     scene_id: SCENE_ID,
                     template_id: templateId,
-                    x: snappedX,
-                    y: snappedY
+                    x: finalX,
+                    y: finalY
                 });
             }
         });
@@ -1206,9 +1229,10 @@
 
         window.addEventListener('mouseup', (e) => {
             if (dragToken) {
-                // Snap to grid
-                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                if (snapToGrid) {
+                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                }
 
                 socket.emit('move_token', {
                     token_id: dragToken.id,
@@ -1233,15 +1257,19 @@
             const mouseY = (touch.clientY - rect.top) / viewScale;
 
             if (isMobilePlacementMode && selectedTemplateForPlacement) {
-                // Tap to place token
-                const snappedX = Math.floor((mouseX - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                const snappedY = Math.floor((mouseY - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                let finalX = mouseX - gridSize / 2;
+                let finalY = mouseY - gridSize / 2;
+
+                if (snapToGrid) {
+                    finalX = Math.floor((mouseX - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    finalY = Math.floor((mouseY - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                }
 
                 socket.emit('add_token', {
                     scene_id: SCENE_ID,
                     template_id: selectedTemplateForPlacement,
-                    x: snappedX,
-                    y: snappedY
+                    x: finalX,
+                    y: finalY
                 });
 
                 // Deselect after placement (optional, but matching typical mobile UX)
@@ -1292,9 +1320,10 @@
 
         window.addEventListener('touchend', (e) => {
             if (dragToken) {
-                // Snap to grid
-                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                if (snapToGrid) {
+                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                }
 
                 socket.emit('move_token', {
                     token_id: dragToken.id,
@@ -1317,6 +1346,9 @@
             gridColor = data.grid_color || 'rgba(255, 255, 255, 0.4)';
             gridThickness = data.grid_thickness || 1;
             scale = data.scale;
+            if (data.snap_to_grid !== undefined) {
+                snapToGrid = data.snap_to_grid;
+            }
 
             document.getElementById('grid-size').value = gridSize;
             document.getElementById('grid-size-num').value = gridSize;
@@ -1327,6 +1359,15 @@
             document.getElementById('grid-thickness').value = gridThickness;
             document.getElementById('grid-color').value = gridColor;
             document.getElementById('grid-scale').value = scale;
+
+            const btn = document.getElementById('btn-snap-grid');
+            if (snapToGrid) {
+                btn.className = "w-full py-1.5 border rounded text-sm transition-colors bg-brand hover:bg-brand-light border-brand text-white";
+                btn.innerText = "🧲 Snap to Grid: ON";
+            } else {
+                btn.className = "w-full py-1.5 border rounded text-sm transition-colors bg-gray-800 hover:bg-gray-700 border-gray-600 text-gray-300";
+                btn.innerText = "🧲 Snap to Grid: OFF";
+            }
 
             drawAll();
         });
