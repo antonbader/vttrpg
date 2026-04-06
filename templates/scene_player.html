@@ -545,153 +545,156 @@
         let dragStartX = 0;
         let dragStartY = 0;
 
-        if (!IS_DISPLAY) {
-            container.addEventListener('mousedown', (e) => {
-                if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed)) return; // Don't interact with tokens when panning
+        container.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed)) return; // Don't interact with tokens when panning
 
+            const rect = tokenCanvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) / viewScale;
+            const mouseY = (e.clientY - rect.top) / viewScale;
+
+            // Find clicked token (reverse order for top-most)
+            let clickedOnToken = false;
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const t = tokens[i];
+                if (mouseX >= t.x && mouseX <= t.x + gridSize &&
+                    mouseY >= t.y && mouseY <= t.y + gridSize) {
+
+                    // Check visibility before allowing interaction
+                    if (!isTokenVisible(t)) {
+                        continue; // Token is hidden by Fog of War
+                    }
+
+                    selectedToken = t;
+                    clickedOnToken = true;
+
+                    // ONLY allow dragging if token name == player name AND not in display mode
+                    if (!IS_DISPLAY && t.name.startsWith(PLAYER_NAME)) {
+                        dragToken = t;
+                        dragStartX = t.x;
+                        dragStartY = t.y;
+                        measuring = true;
+                    }
+                    break;
+                }
+            }
+
+            if (!clickedOnToken) {
+                selectedToken = null;
+            }
+            drawTokens();
+            drawUI();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (dragToken) {
                 const rect = tokenCanvas.getBoundingClientRect();
                 const mouseX = (e.clientX - rect.left) / viewScale;
                 const mouseY = (e.clientY - rect.top) / viewScale;
 
-                // Find clicked token (reverse order for top-most)
-                let clickedOnToken = false;
-                for (let i = tokens.length - 1; i >= 0; i--) {
-                    const t = tokens[i];
-                    if (mouseX >= t.x && mouseX <= t.x + gridSize &&
-                        mouseY >= t.y && mouseY <= t.y + gridSize) {
-
-                        // Check visibility before allowing interaction
-                        if (!isTokenVisible(t)) {
-                            continue; // Token is hidden by Fog of War
-                        }
-
-                        selectedToken = t;
-                        clickedOnToken = true;
-
-                        // ONLY allow dragging if token name == player name
-                        // Allow dragging if the base name matches (ignore the " 1", " 2" suffixes)
-                        if (t.name.startsWith(PLAYER_NAME)) {
-                            dragToken = t;
-                            dragStartX = t.x;
-                            dragStartY = t.y;
-                            measuring = true;
-                        }
-                        break;
-                    }
-                }
-
-                if (!clickedOnToken) {
-                    selectedToken = null;
-                }
+                dragToken.x = mouseX - gridSize/2;
+                dragToken.y = mouseY - gridSize/2;
                 drawTokens();
                 drawUI();
-            });
+            }
+        });
 
-            window.addEventListener('mousemove', (e) => {
-                if (dragToken) {
-                    const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = (e.clientX - rect.left) / viewScale;
-                    const mouseY = (e.clientY - rect.top) / viewScale;
+        window.addEventListener('mouseup', (e) => {
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed) || isPanning) {
+                isPanning = false;
+            }
 
-                    dragToken.x = mouseX - gridSize/2;
-                    dragToken.y = mouseY - gridSize/2;
-                    drawTokens();
-                    drawUI();
+            if (dragToken) {
+                // Snap to grid
+                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                socket.emit('move_token', {
+                    token_id: dragToken.id,
+                    x: dragToken.x,
+                    y: dragToken.y
+                });
+
+                dragToken = null;
+                measuring = false;
+                drawTokens();
+                drawUI();
+            }
+        });
+
+        // Touch Support for Mobile
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) return;
+
+            const touch = e.touches[0];
+            const rect = tokenCanvas.getBoundingClientRect();
+            const mouseX = (touch.clientX - rect.left) / viewScale;
+            const mouseY = (touch.clientY - rect.top) / viewScale;
+
+            let clickedOnToken = false;
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const t = tokens[i];
+                if (mouseX >= t.x && mouseX <= t.x + gridSize &&
+                    mouseY >= t.y && mouseY <= t.y + gridSize) {
+
+                    // Check visibility before allowing interaction
+                    if (!isTokenVisible(t)) {
+                        continue; // Token is hidden by Fog of War
+                    }
+
+                    selectedToken = t;
+                    clickedOnToken = true;
+
+                    // ONLY allow dragging if token name == player name AND not in display mode
+                    if (!IS_DISPLAY && t.name.startsWith(PLAYER_NAME)) {
+                        dragToken = t;
+                        dragStartX = t.x;
+                        dragStartY = t.y;
+                        measuring = true;
+                        e.preventDefault();
+                    }
+                    break;
                 }
-            });
+            }
 
-            window.addEventListener('mouseup', (e) => {
-                if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed) || isPanning) {
-                    isPanning = false;
-                }
+            if (!clickedOnToken) {
+                selectedToken = null;
+            }
+            drawTokens();
+            drawUI();
+        }, {passive: false});
 
-                if (dragToken) {
-                    // Snap to grid
-                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
-
-                    socket.emit('move_token', {
-                        token_id: dragToken.id,
-                        x: dragToken.x,
-                        y: dragToken.y
-                    });
-
-                    dragToken = null;
-                    measuring = false;
-                    drawTokens();
-                    drawUI();
-                }
-            });
-
-            // Touch Support for Mobile
-            container.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 2) return;
-
+        container.addEventListener('touchmove', (e) => {
+            if (dragToken) {
                 const touch = e.touches[0];
                 const rect = tokenCanvas.getBoundingClientRect();
                 const mouseX = (touch.clientX - rect.left) / viewScale;
                 const mouseY = (touch.clientY - rect.top) / viewScale;
 
-                let clickedOnToken = false;
-                for (let i = tokens.length - 1; i >= 0; i--) {
-                    const t = tokens[i];
-                    if (mouseX >= t.x && mouseX <= t.x + gridSize &&
-                        mouseY >= t.y && mouseY <= t.y + gridSize) {
-
-                        selectedToken = t;
-                        clickedOnToken = true;
-
-                        if (t.name.startsWith(PLAYER_NAME)) {
-                            dragToken = t;
-                            dragStartX = t.x;
-                            dragStartY = t.y;
-                            measuring = true;
-                            e.preventDefault();
-                        }
-                        break;
-                    }
-                }
-
-                if (!clickedOnToken) {
-                    selectedToken = null;
-                }
+                dragToken.x = mouseX - gridSize/2;
+                dragToken.y = mouseY - gridSize/2;
                 drawTokens();
                 drawUI();
-            }, {passive: false});
+                e.preventDefault();
+            }
+        }, {passive: false});
 
-            container.addEventListener('touchmove', (e) => {
-                if (dragToken) {
-                    const touch = e.touches[0];
-                    const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = (touch.clientX - rect.left) / viewScale;
-                    const mouseY = (touch.clientY - rect.top) / viewScale;
+        window.addEventListener('touchend', (e) => {
+            if (dragToken) {
+                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
 
-                    dragToken.x = mouseX - gridSize/2;
-                    dragToken.y = mouseY - gridSize/2;
-                    drawTokens();
-                    drawUI();
-                    e.preventDefault();
-                }
-            }, {passive: false});
+                socket.emit('move_token', {
+                    token_id: dragToken.id,
+                    x: dragToken.x,
+                    y: dragToken.y
+                });
 
-            window.addEventListener('touchend', (e) => {
-                if (dragToken) {
-                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
-
-                    socket.emit('move_token', {
-                        token_id: dragToken.id,
-                        x: dragToken.x,
-                        y: dragToken.y
-                    });
-
-                    dragToken = null;
-                    measuring = false;
-                    drawTokens();
-                    drawUI();
-                }
-            });
-        }
+                dragToken = null;
+                measuring = false;
+                drawTokens();
+                drawUI();
+            }
+        });
 
         // Sockets receiving
         socket.on('grid_updated', (data) => {

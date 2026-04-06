@@ -1111,6 +1111,74 @@
             }
         });
 
+        // Touch Support for Mobile Token Interaction
+        container.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2 || isPanMode || isFowMode || isPaintMode) return;
+
+            const touch = e.touches[0];
+            const rect = tokenCanvas.getBoundingClientRect();
+            const mouseX = (touch.clientX - rect.left) / viewScale;
+            const mouseY = (touch.clientY - rect.top) / viewScale;
+
+            // Find clicked token (reverse order for top-most)
+            let clickedOnToken = false;
+            for (let i = tokens.length - 1; i >= 0; i--) {
+                const t = tokens[i];
+                if (mouseX >= t.x && mouseX <= t.x + gridSize &&
+                    mouseY >= t.y && mouseY <= t.y + gridSize) {
+                    dragToken = t;
+                    dragStartX = t.x;
+                    dragStartY = t.y;
+                    measuring = true;
+                    selectedToken = t;
+                    clickedOnToken = true;
+                    document.getElementById('token-selection-controls').style.display = 'block';
+                    e.preventDefault();
+                    break;
+                }
+            }
+            if (!clickedOnToken) {
+                selectedToken = null;
+                document.getElementById('token-selection-controls').style.display = 'none';
+            }
+            drawTokens();
+            drawUI();
+        }, {passive: false});
+
+        container.addEventListener('touchmove', (e) => {
+            if (dragToken) {
+                const touch = e.touches[0];
+                const rect = tokenCanvas.getBoundingClientRect();
+                const mouseX = (touch.clientX - rect.left) / viewScale;
+                const mouseY = (touch.clientY - rect.top) / viewScale;
+
+                dragToken.x = mouseX - gridSize/2;
+                dragToken.y = mouseY - gridSize/2;
+                drawTokens();
+                drawUI();
+                e.preventDefault();
+            }
+        }, {passive: false});
+
+        window.addEventListener('touchend', (e) => {
+            if (dragToken) {
+                // Snap to grid
+                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                socket.emit('move_token', {
+                    token_id: dragToken.id,
+                    x: dragToken.x,
+                    y: dragToken.y
+                });
+
+                dragToken = null;
+                measuring = false;
+                drawTokens();
+                drawUI();
+            }
+        });
+
         // Sockets receiving
         socket.on('grid_updated', (data) => {
             gridSize = data.grid_size;
