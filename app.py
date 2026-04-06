@@ -33,6 +33,10 @@ from models import Campaign, Adventure, Template, Scene, TokenInstance
 with app.app_context():
     db.create_all()
 
+@app.context_processor
+def inject_app_title():
+    return dict(app_title=config.APP_TITLE)
+
 @app.route('/gm/login', methods=['GET', 'POST'])
 def gm_login():
     if request.method == 'POST':
