@@ -1,0 +1,38 @@
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.2:5000
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+Werkzeug appears to be used in a production deployment. Consider switching to a production web server instead.
+ * Debugger is active!
+ * Debugger PIN: 631-326-424
+127.0.0.1 - - [06/Apr/2026 21:37:12] "GET /gm/login HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:37:13] "[32mPOST /gm/login HTTP/1.1[0m" 302 -
+127.0.0.1 - - [06/Apr/2026 21:37:13] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:37:14] "[32mPOST /campaign/create HTTP/1.1[0m" 302 -
+127.0.0.1 - - [06/Apr/2026 21:37:14] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:17] "GET /gm/login HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:17] "[32mPOST /gm/login HTTP/1.1[0m" 302 -
+127.0.0.1 - - [06/Apr/2026 21:38:17] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:17] "[32mPOST /campaign/create HTTP/1.1[0m" 302 -
+127.0.0.1 - - [06/Apr/2026 21:38:17] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:18] "[32mPOST /campaign/1/adventure/create HTTP/1.1[0m" 302 -
+127.0.0.1 - - [06/Apr/2026 21:38:18] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:19] "[32mPOST /adventure/1/scene/create HTTP/1.1[0m" 302 -
+127.0.0.1 - - [06/Apr/2026 21:38:19] "GET / HTTP/1.1" 200 -
+/app/app.py:219: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  adventure = Adventure.query.get(scene.adventure_id)
+/app/app.py:220: LegacyAPIWarning: The Query.get() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  campaign = Campaign.query.get(adventure.campaign_id)
+127.0.0.1 - - [06/Apr/2026 21:38:20] "GET /scene/1/gm HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:20] "GET /socket.io/?EIO=4&transport=polling&t=PraktYB HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:21] "POST /socket.io/?EIO=4&transport=polling&t=PraktZv&sid=C5bx1zzM2XzCIb34AAAA HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:21] "GET /socket.io/?EIO=4&transport=polling&t=PraktaM&sid=C5bx1zzM2XzCIb34AAAA HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:21] "GET /socket.io/?EIO=4&transport=polling&t=Prakth1&sid=C5bx1zzM2XzCIb34AAAA HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:21] "POST /socket.io/?EIO=4&transport=polling&t=Praktg_&sid=C5bx1zzM2XzCIb34AAAA HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:21] "GET /socket.io/?EIO=4&transport=polling&t=PrakthT&sid=C5bx1zzM2XzCIb34AAAA HTTP/1.1" 200 -
+127.0.0.1 - - [06/Apr/2026 21:38:22] "GET /socket.io/?EIO=4&transport=websocket&sid=C5bx1zzM2XzCIb34AAAA HTTP/1.1" 200 -

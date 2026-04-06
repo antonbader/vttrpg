@@ -284,6 +284,7 @@ def delete_scene_bg(scene_id):
         scene.scale = 1.5
         scene.grid_color = 'rgba(255, 255, 255, 0.4)'
         scene.grid_thickness = 1
+        scene.snap_to_grid = True
 
         # Delete tokens associated with the scene? "wie wenn die Szene neu angelegt wurde"
         # The scene would have no background and standard grid
@@ -437,6 +438,8 @@ def handle_update_grid(data):
         scene.grid_color = data.get('grid_color', scene.grid_color)
         scene.grid_thickness = data.get('grid_thickness', scene.grid_thickness)
         scene.scale = data.get('scale', scene.scale)
+        if 'snap_to_grid' in data:
+            scene.snap_to_grid = data['snap_to_grid']
         db.session.commit()
         socketio.emit('grid_updated', data, to=f"scene_{scene_id}")
 

@@ -25,6 +25,10 @@ if os.path.exists(db_path):
         print("Adding 'paint_data' column to 'scene' table...")
         cursor.execute("ALTER TABLE scene ADD COLUMN paint_data TEXT")
 
+    if 'snap_to_grid' not in columns:
+        print("Adding 'snap_to_grid' column to 'scene' table...")
+        cursor.execute("ALTER TABLE scene ADD COLUMN snap_to_grid BOOLEAN DEFAULT 1")
+
     conn.commit()
     conn.close()
     print("Migration complete.")

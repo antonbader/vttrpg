@@ -282,7 +282,7 @@
         let scale = {{ scene.scale or 1.5 }};
         let gridColor = "{{ scene.grid_color or 'rgba(255, 255, 255, 0.4)' }}";
         let gridThickness = {{ scene.grid_thickness or 1 }};
-
+        let snapToGrid = {{ 'true' if scene.snap_to_grid else 'false' }};
 
         let tokens = {{ tokens|tojson|safe }};
         let bgImage = new Image();
@@ -604,9 +604,10 @@
             }
 
             if (dragToken) {
-                // Snap to grid
-                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                if (snapToGrid) {
+                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                }
 
                 socket.emit('move_token', {
                     token_id: dragToken.id,
@@ -680,8 +681,10 @@
 
         window.addEventListener('touchend', (e) => {
             if (dragToken) {
-                dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
-                dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                if (snapToGrid) {
+                    dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                    dragToken.y = Math.round((dragToken.y - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+                }
 
                 socket.emit('move_token', {
                     token_id: dragToken.id,
@@ -704,6 +707,9 @@
             gridColor = data.grid_color || 'rgba(255, 255, 255, 0.4)';
             gridThickness = data.grid_thickness || 1;
             scale = data.scale;
+            if (data.snap_to_grid !== undefined) {
+                snapToGrid = data.snap_to_grid;
+            }
             drawAll();
         });
 

@@ -30,6 +30,7 @@ class Scene(db.Model):
     grid_color = db.Column(db.String(50), default='rgba(255, 255, 255, 0.4)')
     grid_thickness = db.Column(db.Integer, default=1)
     scale = db.Column(db.Float, default=1.5) # meters per square
+    snap_to_grid = db.Column(db.Boolean, default=True)
     is_active = db.Column(db.Boolean, default=False)
 
 class Template(db.Model):
