@@ -26,8 +26,12 @@
     </style>
 </head>
 <body class="min-h-screen pb-10">
-    <header class="bg-brand-dark text-white p-6 text-center shadow-lg mb-8">
+    <header class="bg-brand-dark text-white p-6 text-center shadow-lg mb-8 flex justify-between items-center">
+        <div class="w-24"></div> <!-- Spacer for centering -->
         <h1 class="text-3xl font-bold">TTRPG Kampagnen-Dashboard</h1>
+        <div class="w-24 text-right">
+            <a href="{{ url_for('gm_logout') }}" class="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-gray-200 transition-colors">Logout</a>
+        </div>
     </header>
 
     <main class="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
