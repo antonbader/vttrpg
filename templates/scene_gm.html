@@ -234,7 +234,10 @@
             <div class="sidebar-content" id="sidebar-right-content">
                 <div class="flex-grow flex flex-col">
 
-                <h3 class="font-bold text-brand-light border-b border-gray-700 pb-1 mb-3">Library Templates</h3>
+                <div class="flex justify-between items-center border-b border-gray-700 pb-1 mb-3">
+                    <h3 class="font-bold text-brand-light">Library Templates</h3>
+                    <button id="btn-mobile-placement" class="text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded" title="Mobile Placement Mode (Tap to Select, Tap to Place)">📱 Mode</button>
+                </div>
                 <div id="templates-list" class="overflow-y-auto pr-1 space-y-2 pb-2">
                     {% set player_templates = templates | selectattr("type", "equalto", "Player") | list %}
                     {% set npc_templates = templates | selectattr("type", "equalto", "NPC") | list %}
@@ -756,12 +759,57 @@
             emitGridUpdate();
         });
 
+        // Mobile Placement State
+        let isMobilePlacementMode = false;
+        let selectedTemplateForPlacement = null;
+
+        document.getElementById('btn-mobile-placement').addEventListener('click', (e) => {
+            isMobilePlacementMode = !isMobilePlacementMode;
+            e.target.style.backgroundColor = isMobilePlacementMode ? 'green' : '';
+            e.target.style.color = isMobilePlacementMode ? 'white' : '';
+            if (!isMobilePlacementMode) {
+                selectedTemplateForPlacement = null;
+                updateTemplateSelectionVisuals();
+            }
+        });
+
+        function updateTemplateSelectionVisuals() {
+            document.querySelectorAll('.template-item').forEach(item => {
+                if (item.dataset.templateId === selectedTemplateForPlacement) {
+                    item.style.borderColor = '#10b981'; // Green border for selected
+                    item.style.backgroundColor = '#1f2937';
+                } else {
+                    item.style.borderColor = '';
+                    item.style.backgroundColor = '';
+                }
+            });
+        }
+
         // Drag & Drop Templates -> Canvas
         const templateItems = document.querySelectorAll('.template-item');
         templateItems.forEach(item => {
             item.addEventListener('dragstart', (e) => {
+                if (isMobilePlacementMode) {
+                    e.preventDefault();
+                    return;
+                }
                 e.dataTransfer.setData('template_id', item.dataset.templateId);
             });
+
+            // Tap to select for mobile placement
+            item.addEventListener('click', (e) => {
+                if (isMobilePlacementMode) {
+                    selectedTemplateForPlacement = item.dataset.templateId;
+                    updateTemplateSelectionVisuals();
+                }
+            });
+            item.addEventListener('touchstart', (e) => {
+                if (isMobilePlacementMode) {
+                    // Prevent default to avoid simulated clicks interfering, though we handle click anyway
+                    selectedTemplateForPlacement = item.dataset.templateId;
+                    updateTemplateSelectionVisuals();
+                }
+            }, {passive: true});
         });
 
         container.addEventListener('dragover', (e) => e.preventDefault());
@@ -884,6 +932,38 @@
                 drawFowBrush(x, y);
             }
             drawUI();
+        });
+
+        fowCanvas.addEventListener('touchstart', (e) => {
+            if (!isFowMode) return;
+            isDrawingFow = true;
+            const rect = fowCanvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) / viewScale;
+            const y = (touch.clientY - rect.top) / viewScale;
+            drawFowBrush(x, y);
+        }, {passive: true});
+
+        fowCanvas.addEventListener('touchmove', (e) => {
+            if (!isFowMode || !isDrawingFow) return;
+            e.preventDefault(); // Prevent scrolling while drawing
+            const rect = fowCanvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) / viewScale;
+            const y = (touch.clientY - rect.top) / viewScale;
+            fowMouseX = x;
+            fowMouseY = y;
+            drawFowBrush(x, y);
+            drawUI();
+        }, {passive: false});
+
+        fowCanvas.addEventListener('touchend', (e) => {
+            if (!isFowMode) return;
+            isDrawingFow = false;
+            fowMouseX = -1000;
+            fowMouseY = -1000;
+            drawUI();
+            saveFow();
         });
 
         container.addEventListener('mouseout', (e) => {
@@ -1040,6 +1120,38 @@
             drawUI();
         });
 
+        paintCanvas.addEventListener('touchstart', (e) => {
+            if (!isPaintMode) return;
+            isDrawingPaint = true;
+            const rect = paintCanvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) / viewScale;
+            const y = (touch.clientY - rect.top) / viewScale;
+            drawPaintBrush(x, y);
+        }, {passive: true});
+
+        paintCanvas.addEventListener('touchmove', (e) => {
+            if (!isPaintMode || !isDrawingPaint) return;
+            e.preventDefault(); // Prevent scrolling while drawing
+            const rect = paintCanvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = (touch.clientX - rect.left) / viewScale;
+            const y = (touch.clientY - rect.top) / viewScale;
+            paintMouseX = x;
+            paintMouseY = y;
+            drawPaintBrush(x, y);
+            drawUI();
+        }, {passive: false});
+
+        paintCanvas.addEventListener('touchend', (e) => {
+            if (!isPaintMode) return;
+            isDrawingPaint = false;
+            paintMouseX = -1000;
+            paintMouseY = -1000;
+            drawUI();
+            savePaint();
+        });
+
 
         // Token Interaction on Canvas
         let dragToken = null;
@@ -1119,6 +1231,24 @@
             const rect = tokenCanvas.getBoundingClientRect();
             const mouseX = (touch.clientX - rect.left) / viewScale;
             const mouseY = (touch.clientY - rect.top) / viewScale;
+
+            if (isMobilePlacementMode && selectedTemplateForPlacement) {
+                // Tap to place token
+                const snappedX = Math.floor((mouseX - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
+                const snappedY = Math.floor((mouseY - gridOffsetY) / gridSize) * gridSize + gridOffsetY;
+
+                socket.emit('add_token', {
+                    scene_id: SCENE_ID,
+                    template_id: selectedTemplateForPlacement,
+                    x: snappedX,
+                    y: snappedY
+                });
+
+                // Deselect after placement (optional, but matching typical mobile UX)
+                selectedTemplateForPlacement = null;
+                updateTemplateSelectionVisuals();
+                return;
+            }
 
             // Find clicked token (reverse order for top-most)
             let clickedOnToken = false;
