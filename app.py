@@ -225,6 +225,7 @@ def delete_scene_bg(scene_id):
         # Optionally, clear the FOW mask and grid sizes, tokens if we need to reset completely?
         # The prompt says: "Nach dem Löschen soll es wieder so sein, wie wenn die Szene neu angelegt wurde."
         scene.fow_mask = None
+        scene.paint_data = None
         scene.grid_size = 50
         scene.grid_offset_x = 0
         scene.grid_offset_y = 0
@@ -449,6 +450,17 @@ def handle_update_fow(data):
         scene.fow_mask = mask
         db.session.commit()
         socketio.emit('fow_updated', {'mask': mask}, to=f"scene_{scene_id}", include_self=False)
+
+@socketio.on('update_paint')
+def handle_update_paint(data):
+    scene_id = data.get('scene_id')
+    paint_data = data.get('paint_data')
+
+    scene = db.session.get(Scene, scene_id)
+    if scene:
+        scene.paint_data = paint_data
+        db.session.commit()
+        socketio.emit('paint_updated', {'paint_data': paint_data}, to=f"scene_{scene_id}", include_self=False)
 
 from flask_socketio import join_room, leave_room
 

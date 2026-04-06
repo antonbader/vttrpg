@@ -23,6 +23,7 @@ class Scene(db.Model):
     tokens = db.relationship('TokenInstance', backref='scene', lazy=True, cascade="all, delete-orphan")
     background_image = db.Column(db.String(255), nullable=True)
     fow_mask = db.Column(db.Text, nullable=True) # Base64 encoded or path to mask
+    paint_data = db.Column(db.Text, nullable=True) # Base64 encoded paint layer data
     grid_size = db.Column(db.Integer, default=50)
     grid_offset_x = db.Column(db.Integer, default=0)
     grid_offset_y = db.Column(db.Integer, default=0)
