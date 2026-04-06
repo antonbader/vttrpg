@@ -36,11 +36,28 @@
 
 
         <div id="canvas-container" style="position: relative;">
-            <div id="view-controls" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; display: flex; gap: 5px;">
-                <button id="btn-pan-mode" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Verschieben-Modus (Pan)">✋</button>
-                <button id="btn-zoom-in" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom In">➕</button>
-                <button id="btn-zoom-out" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Zoom Out">➖</button>
-                <button id="btn-zoom-reset" class="bg-gray-700 text-white p-2 rounded border border-gray-600" title="Reset View">Reset</button>
+            <div id="view-controls" style="position: absolute; bottom: 20px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
+                <div style="display: grid; grid-template-columns: 40px 40px 40px; grid-template-rows: 40px 40px 40px; gap: 5px; text-align: center;">
+                    <div style="grid-column: 2; grid-row: 1;">
+                        <button id="btn-pan-up" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 100%; height: 100%; touch-action: manipulation;">⬆️</button>
+                    </div>
+                    <div style="grid-column: 1; grid-row: 2;">
+                        <button id="btn-pan-left" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 100%; height: 100%; touch-action: manipulation;">⬅️</button>
+                    </div>
+                    <div style="grid-column: 2; grid-row: 2;">
+                        <button id="btn-zoom-reset" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 100%; height: 100%; font-size: 0.8rem; touch-action: manipulation;" title="Reset View">RST</button>
+                    </div>
+                    <div style="grid-column: 3; grid-row: 2;">
+                        <button id="btn-pan-right" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 100%; height: 100%; touch-action: manipulation;">➡️</button>
+                    </div>
+                    <div style="grid-column: 2; grid-row: 3;">
+                        <button id="btn-pan-down" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 100%; height: 100%; touch-action: manipulation;">⬇️</button>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <button id="btn-zoom-in" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 40px; height: 40px; touch-action: manipulation;" title="Zoom In">➕</button>
+                    <button id="btn-zoom-out" class="bg-gray-700 text-white rounded border border-gray-600" style="width: 40px; height: 40px; touch-action: manipulation;" title="Zoom Out">➖</button>
+                </div>
             </div>
 
             <canvas id="bgLayer"></canvas>
@@ -78,7 +95,6 @@
         let viewScale = 1.0;
         let viewOffsetX = 0;
         let viewOffsetY = 0;
-        let isPanMode = false;
         let isPanning = false;
         let panStartX = 0;
         let panStartY = 0;
@@ -126,11 +142,15 @@
             viewScale = 1.0; viewOffsetX = 0; viewOffsetY = 0; updateViewTransform();
         });
 
-        const btnPanMode = document.getElementById('btn-pan-mode');
-        if (btnPanMode) btnPanMode.addEventListener('click', () => {
-            isPanMode = !isPanMode;
-            btnPanMode.style.backgroundColor = isPanMode ? '#4B5563' : 'transparent';
-        });
+        const panStep = 100;
+        const btnPanUp = document.getElementById('btn-pan-up');
+        if (btnPanUp) btnPanUp.addEventListener('click', () => { viewOffsetY += panStep; updateViewTransform(); });
+        const btnPanDown = document.getElementById('btn-pan-down');
+        if (btnPanDown) btnPanDown.addEventListener('click', () => { viewOffsetY -= panStep; updateViewTransform(); });
+        const btnPanLeft = document.getElementById('btn-pan-left');
+        if (btnPanLeft) btnPanLeft.addEventListener('click', () => { viewOffsetX += panStep; updateViewTransform(); });
+        const btnPanRight = document.getElementById('btn-pan-right');
+        if (btnPanRight) btnPanRight.addEventListener('click', () => { viewOffsetX -= panStep; updateViewTransform(); });
 
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
@@ -152,7 +172,7 @@
         });
 
         container.addEventListener('mousedown', (e) => {
-            if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed)) {
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed)) {
                 isPanning = true;
                 panStartX = e.clientX - viewOffsetX;
                 panStartY = e.clientY - viewOffsetY;
@@ -169,33 +189,82 @@
         });
 
         window.addEventListener('mouseup', (e) => {
-            if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed) || isPanning) {
+            if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed) || isPanning) {
                 isPanning = false;
             }
         });
 
         container.addEventListener('contextmenu', e => e.preventDefault());
 
-        // Touch Pan
+        // Pinch-to-Zoom & 2-finger Pan
+        let initialPinchDistance = null;
+        let initialPinchScale = null;
+        let initialPinchCenter = null;
+        let initialViewOffsetX = null;
+        let initialViewOffsetY = null;
+
+        function getPinchDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getPinchCenter(touches) {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2
+            };
+        }
+
         container.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2 || (e.touches.length === 1 && isPanMode)) {
-                isPanning = true;
-                panStartX = e.touches[0].clientX - viewOffsetX;
-                panStartY = e.touches[0].clientY - viewOffsetY;
+            if (e.touches.length === 2) {
+                isPanning = true; // Still use this flag to stop other interactions
+                initialPinchDistance = getPinchDistance(e.touches);
+                initialPinchScale = viewScale;
+                initialPinchCenter = getPinchCenter(e.touches);
+                initialViewOffsetX = viewOffsetX;
+                initialViewOffsetY = viewOffsetY;
+                e.preventDefault();
             }
         }, {passive: false});
 
         container.addEventListener('touchmove', (e) => {
-            if (isPanning) {
+            if (e.touches.length === 2 && initialPinchDistance) {
                 e.preventDefault();
-                viewOffsetX = e.touches[0].clientX - panStartX;
-                viewOffsetY = e.touches[0].clientY - panStartY;
+
+                // Handle Zoom
+                const currentDistance = getPinchDistance(e.touches);
+                const scaleDiff = currentDistance / initialPinchDistance;
+                let newScale = initialPinchScale * scaleDiff;
+                newScale = Math.max(0.1, Math.min(newScale, 5.0));
+
+                const currentCenter = getPinchCenter(e.touches);
+
+                const rect = container.getBoundingClientRect();
+                const cx = initialPinchCenter.x - rect.left;
+                const cy = initialPinchCenter.y - rect.top;
+
+                // Adjust offset for zoom centered on initial pinch center
+                let newOffsetX = cx - (cx - initialViewOffsetX) * (newScale / initialPinchScale);
+                let newOffsetY = cy - (cy - initialViewOffsetY) * (newScale / initialPinchScale);
+
+                // Handle Pan
+                const panX = currentCenter.x - initialPinchCenter.x;
+                const panY = currentCenter.y - initialPinchCenter.y;
+
+                viewScale = newScale;
+                viewOffsetX = newOffsetX + panX;
+                viewOffsetY = newOffsetY + panY;
+
                 updateViewTransform();
             }
         }, {passive: false});
 
-        window.addEventListener('touchend', () => {
-            isPanning = false;
+        window.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                isPanning = false;
+                initialPinchDistance = null;
+            }
         });
 
         let gridSize = {{ scene.grid_size or 50 }};
@@ -459,11 +528,11 @@
 
         if (!IS_DISPLAY) {
             container.addEventListener('mousedown', (e) => {
-                if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed)) return; // Don't interact with tokens when panning
+                if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed)) return; // Don't interact with tokens when panning
 
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = (e.clientX - rect.left) / viewScale;
-                const mouseY = (e.clientY - rect.top) / viewScale;
+                const mouseX = (e.clientX - rect.left - viewOffsetX) / viewScale;
+                const mouseY = (e.clientY - rect.top - viewOffsetY) / viewScale;
 
                 // Find clicked token (reverse order for top-most)
                 let clickedOnToken = false;
@@ -502,8 +571,8 @@
             window.addEventListener('mousemove', (e) => {
                 if (dragToken) {
                     const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = (e.clientX - rect.left) / viewScale;
-                    const mouseY = (e.clientY - rect.top) / viewScale;
+                    const mouseX = (e.clientX - rect.left - viewOffsetX) / viewScale;
+                    const mouseY = (e.clientY - rect.top - viewOffsetY) / viewScale;
 
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
@@ -513,7 +582,7 @@
             });
 
             window.addEventListener('mouseup', (e) => {
-                if (e.button === 1 || e.button === 2 || isPanMode || (e.button === 0 && spacePressed) || isPanning) {
+                if (e.button === 1 || e.button === 2 || (e.button === 0 && spacePressed) || isPanning) {
                     isPanning = false;
                 }
 
@@ -537,12 +606,12 @@
 
             // Touch Support for Mobile
             container.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 2 || (e.touches.length === 1 && isPanMode)) return;
+                if (e.touches.length === 2) return;
 
                 const touch = e.touches[0];
                 const rect = tokenCanvas.getBoundingClientRect();
-                const mouseX = (touch.clientX - rect.left) / viewScale;
-                const mouseY = (touch.clientY - rect.top) / viewScale;
+                const mouseX = (touch.clientX - rect.left - viewOffsetX) / viewScale;
+                const mouseY = (touch.clientY - rect.top - viewOffsetY) / viewScale;
 
                 let clickedOnToken = false;
                 for (let i = tokens.length - 1; i >= 0; i--) {
@@ -575,8 +644,8 @@
                 if (dragToken) {
                     const touch = e.touches[0];
                     const rect = tokenCanvas.getBoundingClientRect();
-                    const mouseX = (touch.clientX - rect.left) / viewScale;
-                    const mouseY = (touch.clientY - rect.top) / viewScale;
+                    const mouseX = (touch.clientX - rect.left - viewOffsetX) / viewScale;
+                    const mouseY = (touch.clientY - rect.top - viewOffsetY) / viewScale;
 
                     dragToken.x = mouseX - gridSize/2;
                     dragToken.y = mouseY - gridSize/2;
