@@ -142,6 +142,20 @@
             </div>
 
             <div class="mt-auto">
+
+                <details class="group mb-2" open>
+                <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors text-brand-light">
+                    <span>Ping & Point</span>
+                    <span class="transition group-open:rotate-180">▼</span>
+                </summary>
+                <div class="mt-2 pl-2 border-l-2 border-gray-700">
+                <div class="control-group">
+                    <button id="btn-ping-mode" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">📍 Ping Aktivieren</button>
+                    <button id="btn-point-mode" class="w-full mb-2 py-1.5 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded text-sm transition-colors text-white">🔦 Laserpointer Aktivieren</button>
+                </div>
+                </div>
+                </details>
+
                 <details class="group mb-2" open>
                 <summary class="flex justify-between items-center font-bold cursor-pointer list-none text-sm bg-gray-800 p-2 rounded border border-gray-700 hover:border-brand transition-colors text-brand-light">
                     <span>Fog of War</span>
@@ -499,6 +513,17 @@
         let paintMouseY = -1000;
         let paintDataStr = "{{ scene.paint_data or '' }}";
 
+        let isPingMode = false;
+        let isPointMode = false;
+        let isPointing = false;
+        let lastPointTime = 0;
+
+        function deactivateAllModes() {
+            if (isFowMode) document.getElementById('btn-fow-brush').click();
+            if (isPaintMode) document.getElementById('btn-paint-brush').click();
+            if (isPingMode) document.getElementById('btn-ping-mode').click();
+            if (isPointMode) document.getElementById('btn-point-mode').click();
+        }
 
         function initCanvases() {
             let w = window.innerWidth;
@@ -714,6 +739,62 @@
                 }
                 uiCtx.stroke();
             }
+
+            // Draw Pings
+            const now = Date.now();
+            pings.forEach(p => {
+                const elapsed = now - p.startTime;
+                const progress = elapsed / p.duration;
+                if (progress <= 1) {
+                    const radius = 10 + (progress * 40); // animate radius from 10 to 50
+                    const alpha = 1 - progress; // fade out
+                    uiCtx.beginPath();
+                    uiCtx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                    uiCtx.strokeStyle = `rgba(255, 0, 0, ${alpha})`;
+                    uiCtx.lineWidth = 4;
+                    uiCtx.stroke();
+
+                    // inner dot
+                    uiCtx.beginPath();
+                    uiCtx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                    uiCtx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
+                    uiCtx.fill();
+                }
+            });
+
+            // Draw Pointer Tail
+            if (pointerTails.length > 0) {
+                uiCtx.beginPath();
+                let isDrawing = false;
+                for (let i = 0; i < pointerTails.length; i++) {
+                    const pt = pointerTails[i];
+                    if (pt.break) {
+                        isDrawing = false;
+                    } else {
+                        if (!isDrawing) {
+                            uiCtx.moveTo(pt.x, pt.y);
+                            isDrawing = true;
+                        } else {
+                            uiCtx.lineTo(pt.x, pt.y);
+                        }
+                    }
+                }
+                uiCtx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                uiCtx.lineWidth = 6;
+                uiCtx.lineCap = 'round';
+                uiCtx.lineJoin = 'round';
+                uiCtx.stroke();
+
+                // Draw the tip (if the last point is not a break)
+                const lastPt = pointerTails[pointerTails.length - 1];
+                if (!lastPt.break) {
+                    uiCtx.beginPath();
+                    uiCtx.arc(lastPt.x, lastPt.y, 8, 0, Math.PI * 2);
+                    uiCtx.fillStyle = 'red';
+                    uiCtx.fill();
+                }
+            }
+
         }
 
         // Grid Controls Logic
@@ -857,8 +938,25 @@
             }
         });
 
+        // Ping & Point Controls
+        document.getElementById('btn-ping-mode').addEventListener('click', (e) => {
+            if (!isPingMode) deactivateAllModes();
+            isPingMode = !isPingMode;
+            e.target.style.backgroundColor = isPingMode ? 'green' : '';
+            e.target.style.color = isPingMode ? 'white' : '';
+        });
+
+        document.getElementById('btn-point-mode').addEventListener('click', (e) => {
+            if (!isPointMode) deactivateAllModes();
+            isPointMode = !isPointMode;
+            e.target.style.backgroundColor = isPointMode ? 'green' : '';
+            e.target.style.color = isPointMode ? 'white' : '';
+        });
+
+
         // Fog of War Controls
         document.getElementById('btn-fow-brush').addEventListener('click', (e) => {
+            if (!isFowMode) deactivateAllModes();
             isFowMode = !isFowMode;
             e.target.style.backgroundColor = isFowMode ? 'green' : '';
             e.target.style.color = isFowMode ? 'white' : '';
@@ -1015,6 +1113,7 @@
 
         // Paint Controls
         document.getElementById('btn-paint-brush').addEventListener('click', (e) => {
+            if (!isPaintMode) deactivateAllModes();
             isPaintMode = !isPaintMode;
             e.target.style.backgroundColor = isPaintMode ? 'green' : '';
             e.target.style.color = isPaintMode ? 'white' : '';
@@ -1031,9 +1130,6 @@
                 paintCanvas.style.pointerEvents = 'none';
             }
 
-            if (isPaintMode && isFowMode) {
-                document.getElementById('btn-fow-brush').click(); // Turn off FOW
-            }
             if (!isPaintMode) {
                 paintMouseX = -1000;
                 paintMouseY = -1000;
@@ -1044,12 +1140,6 @@
         document.getElementById('fow-outline-color').addEventListener('change', (e) => {
             fowOutlineColor = e.target.value;
             if (isFowMode) drawUI();
-        });
-        // Modifying fow brush listener so Fow off if Paint on
-        document.getElementById('btn-fow-brush').addEventListener('click', (e) => {
-            if (isFowMode && isPaintMode) {
-                document.getElementById('btn-paint-brush').click();
-            }
         });
 
         document.getElementById('btn-paint-mode-draw').addEventListener('click', (e) => {
@@ -1189,6 +1279,20 @@
             const mouseX = (e.clientX - rect.left) / viewScale;
             const mouseY = (e.clientY - rect.top) / viewScale;
 
+            if (isPingMode) {
+                socket.emit('ping_location', { scene_id: SCENE_ID, x: mouseX, y: mouseY });
+                renderLocalPing(mouseX, mouseY);
+                return;
+            }
+
+            if (isPointMode) {
+                isPointing = true;
+                socket.emit('pointer_move', { scene_id: SCENE_ID, x: mouseX, y: mouseY });
+                addPointerTail(mouseX, mouseY);
+                return;
+            }
+
+
 
             // Find clicked token (reverse order for top-most)
             let clickedOnToken = false;
@@ -1215,6 +1319,19 @@
         });
 
         window.addEventListener('mousemove', (e) => {
+            if (isPointing) {
+                const now = Date.now();
+                if (now - lastPointTime > 30) { // Limit to ~30fps
+                    const rect = tokenCanvas.getBoundingClientRect();
+                    const mouseX = (e.clientX - rect.left) / viewScale;
+                    const mouseY = (e.clientY - rect.top) / viewScale;
+                    socket.emit('pointer_move', { scene_id: SCENE_ID, x: mouseX, y: mouseY });
+                    addPointerTail(mouseX, mouseY);
+                    lastPointTime = now;
+                }
+                return;
+            }
+
             if (dragToken) {
                 const rect = tokenCanvas.getBoundingClientRect();
                 const mouseX = (e.clientX - rect.left) / viewScale;
@@ -1228,6 +1345,12 @@
         });
 
         window.addEventListener('mouseup', (e) => {
+            if (isPointing) {
+                isPointing = false;
+                socket.emit('pointer_stop', { scene_id: SCENE_ID });
+                pointerTails.push({ break: true, timestamp: Date.now() }); // Local break
+            }
+
             if (dragToken) {
                 if (snapToGrid) {
                     dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
@@ -1250,11 +1373,25 @@
         // Touch Support for Mobile Token Interaction
         container.addEventListener('touchstart', (e) => {
             if (e.touches.length === 2 || isPanMode || isFowMode || isPaintMode) return;
-
             const touch = e.touches[0];
             const rect = tokenCanvas.getBoundingClientRect();
             const mouseX = (touch.clientX - rect.left) / viewScale;
             const mouseY = (touch.clientY - rect.top) / viewScale;
+
+            if (isPingMode) {
+                socket.emit('ping_location', { scene_id: SCENE_ID, x: mouseX, y: mouseY });
+                renderLocalPing(mouseX, mouseY);
+                e.preventDefault();
+                return;
+            }
+
+            if (isPointMode) {
+                isPointing = true;
+                socket.emit('pointer_move', { scene_id: SCENE_ID, x: mouseX, y: mouseY });
+                addPointerTail(mouseX, mouseY);
+                e.preventDefault();
+                return;
+            }
 
             if (isMobilePlacementMode && selectedTemplateForPlacement) {
                 let finalX = mouseX - gridSize / 2;
@@ -1304,6 +1441,21 @@
         }, {passive: false});
 
         container.addEventListener('touchmove', (e) => {
+            if (isPointing) {
+                e.preventDefault();
+                const now = Date.now();
+                if (now - lastPointTime > 30) {
+                    const touch = e.touches[0];
+                    const rect = tokenCanvas.getBoundingClientRect();
+                    const mouseX = (touch.clientX - rect.left) / viewScale;
+                    const mouseY = (touch.clientY - rect.top) / viewScale;
+                    socket.emit('pointer_move', { scene_id: SCENE_ID, x: mouseX, y: mouseY });
+                    addPointerTail(mouseX, mouseY);
+                    lastPointTime = now;
+                }
+                return;
+            }
+
             if (dragToken) {
                 const touch = e.touches[0];
                 const rect = tokenCanvas.getBoundingClientRect();
@@ -1319,6 +1471,12 @@
         }, {passive: false});
 
         window.addEventListener('touchend', (e) => {
+            if (isPointing) {
+                isPointing = false;
+                socket.emit('pointer_stop', { scene_id: SCENE_ID });
+                pointerTails.push({ break: true, timestamp: Date.now() }); // Local break
+            }
+
             if (dragToken) {
                 if (snapToGrid) {
                     dragToken.x = Math.round((dragToken.x - gridOffsetX) / gridSize) * gridSize + gridOffsetX;
@@ -1443,6 +1601,64 @@
                 clearPaint();
             }
         });
+
+        // Ping and Pointer Local Rendering for GM
+        let pings = [];
+        let pointerTails = []; // To render other GMs pointers if needed, or own pointer
+
+        function renderLocalPing(x, y) {
+            pings.push({ x: x, y: y, startTime: Date.now(), duration: 1500 });
+        }
+
+        function addPointerTail(x, y) {
+            pointerTails.push({ x: x, y: y, timestamp: Date.now() });
+        }
+
+        socket.on('pointer_stop', () => {
+            // Add a break marker to prevent streaking
+            pointerTails.push({ break: true, timestamp: Date.now() });
+        });
+
+        // We listen to our own events to render them locally (if we have multiple GMs)
+        // But since we are the GM, we just render our own.
+        // We do not listen to 'ping_location' or 'pointer_move' from the server here to avoid duplicate rendering,
+        // since we already call `renderLocalPing` and `addPointerTail` locally when the GM initiates them.
+        // Multiple GMs aren't explicitly requested to see each other's pings, but players do.
+
+        // Animation Loop for Pings and Pointers
+        function animateEffects() {
+            // We draw effects on uiLayer, but uiLayer is cleared by drawUI() frequently.
+            // So we need to hook into drawUI() or just draw over it continuously.
+            // Since drawUI() is called on mousemove, we should draw effects in a separate requestAnimationFrame loop
+            // BUT we must not clear the UI layer entirely if we only want to update effects.
+            // Better to add a dedicated canvas for effects or just redraw the UI completely in the loop.
+            // For this implementation, we will redraw the UI and effects together, or just append to UI layer.
+
+            // Let's just add a quick draw call that doesn't clear the whole UI, or we clear a specific effects canvas.
+            // Actually, `drawUI` clears `uiCanvas`. We can just call `drawUI` from the animation loop if there are active effects.
+            let needsRedraw = false;
+            const now = Date.now();
+
+            if (pings.length > 0) {
+                pings = pings.filter(p => now - p.startTime < p.duration);
+                needsRedraw = true;
+            }
+
+            if (pointerTails.length > 0) {
+                pointerTails = pointerTails.filter(t => now - t.timestamp < 1000); // 1 sec tail
+                needsRedraw = true;
+            }
+
+            if (needsRedraw) {
+                // Call drawUI to prevent smearing during animation
+                drawUI();
+            }
+
+            requestAnimationFrame(animateEffects);
+        }
+
+        // Start animation loop
+        requestAnimationFrame(animateEffects);
 
     </script>
     <script>
