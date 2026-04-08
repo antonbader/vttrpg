@@ -519,6 +519,29 @@ def handle_update_paint(data):
         db.session.commit()
         socketio.emit('paint_updated', {'paint_data': paint_data}, to=f"scene_{scene_id}", include_self=False)
 
+@socketio.on('ping_location')
+def handle_ping_location(data):
+    scene_id = data.get('scene_id')
+    x = data.get('x')
+    y = data.get('y')
+    if scene_id is not None and x is not None and y is not None:
+        socketio.emit('ping_location', {'x': x, 'y': y}, to=f"scene_{scene_id}", include_self=False)
+
+@socketio.on('pointer_move')
+def handle_pointer_move(data):
+    scene_id = data.get('scene_id')
+    x = data.get('x')
+    y = data.get('y')
+    if scene_id is not None and x is not None and y is not None:
+        socketio.emit('pointer_move', {'x': x, 'y': y}, to=f"scene_{scene_id}", include_self=False)
+
+@socketio.on('pointer_stop')
+def handle_pointer_stop(data):
+    scene_id = data.get('scene_id')
+    if scene_id is not None:
+        socketio.emit('pointer_stop', {}, to=f"scene_{scene_id}", include_self=False)
+
+
 from flask_socketio import join_room, leave_room
 
 @socketio.on('join')

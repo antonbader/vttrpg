@@ -766,6 +766,132 @@
             }
         });
 
+        // Ping & Pointer Logic
+        let pings = [];
+        let pointerTails = [];
+
+        function isPointVisible(x, y) {
+            // Reusing the FOW alpha check logic, but for a single point
+            try {
+                // To account for brush size or just check a small area around the point,
+                // we'll just check the exact pixel since the mask alpha applies to the canvas.
+                // However, players default FOW canvas is black, and mask 'cuts' out holes with alpha.
+                const imgData = fowCtx.getImageData(x, y, 1, 1).data;
+                // If the FOW is black, alpha is high. If cleared, alpha is low.
+                if (imgData[3] < 128) {
+                    return true;
+                }
+                return false;
+            } catch (e) {
+                return true; // Fallback to visible if cross-origin errors occur
+            }
+        }
+
+        socket.on('ping_location', (data) => {
+            if (isPointVisible(data.x, data.y)) {
+                pings.push({ x: data.x, y: data.y, startTime: Date.now(), duration: 1500 });
+            }
+        });
+
+        socket.on('pointer_move', (data) => {
+            if (isPointVisible(data.x, data.y)) {
+                pointerTails.push({ x: data.x, y: data.y, timestamp: Date.now() });
+            } else {
+                // If it goes into FOW, maybe we break the line visually or just don't add
+                // Actually, if we don't add it, the tail will just jump or disconnect. That's fine.
+            }
+        });
+
+        socket.on('pointer_stop', () => {
+            // Add a break marker to prevent streaking
+            pointerTails.push({ break: true, timestamp: Date.now() });
+        });
+
+        function animateEffects() {
+            let needsRedraw = false;
+            const now = Date.now();
+
+            if (pings.length > 0) {
+                pings = pings.filter(p => now - p.startTime < p.duration);
+                needsRedraw = true;
+            }
+
+            if (pointerTails.length > 0) {
+                pointerTails = pointerTails.filter(t => now - t.timestamp < 1000); // 1 sec tail
+                needsRedraw = true;
+            }
+
+            if (needsRedraw) {
+                // We shouldn't clear the whole UI layer because measuring/drag lines might be there.
+                // But uiCanvas is cleared and redrawn by drawUI().
+                // So we can just call drawUI(), and then draw our effects.
+                // Wait, drawUI() handles its own things. We'll hook into drawUI by wrapping it,
+                // or just calling it here if no other interaction is happening.
+
+                // Always call drawUI to prevent smearing (e.g. during panning)
+                drawUI();
+
+                // Now draw our effects over it
+                // Draw Pings
+                pings.forEach(p => {
+                    const elapsed = now - p.startTime;
+                    const progress = elapsed / p.duration;
+                    if (progress <= 1) {
+                        const radius = 10 + (progress * 40); // animate radius from 10 to 50
+                        const alpha = 1 - progress; // fade out
+                        uiCtx.beginPath();
+                        uiCtx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                        uiCtx.strokeStyle = `rgba(255, 0, 0, ${alpha})`;
+                        uiCtx.lineWidth = 4;
+                        uiCtx.stroke();
+
+                        // inner dot
+                        uiCtx.beginPath();
+                        uiCtx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                        uiCtx.fillStyle = `rgba(255, 0, 0, ${alpha})`;
+                        uiCtx.fill();
+                    }
+                });
+
+                // Draw Pointer Tail
+                if (pointerTails.length > 0) {
+                    uiCtx.beginPath();
+                    let isDrawing = false;
+                    for (let i = 0; i < pointerTails.length; i++) {
+                        const pt = pointerTails[i];
+                        if (pt.break) {
+                            isDrawing = false;
+                        } else {
+                            if (!isDrawing) {
+                                uiCtx.moveTo(pt.x, pt.y);
+                                isDrawing = true;
+                            } else {
+                                uiCtx.lineTo(pt.x, pt.y);
+                            }
+                        }
+                    }
+                    uiCtx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+                    uiCtx.lineWidth = 6;
+                    uiCtx.lineCap = 'round';
+                    uiCtx.lineJoin = 'round';
+                    uiCtx.stroke();
+
+                    // Draw the tip
+                    const lastPt = pointerTails[pointerTails.length - 1];
+                    if (!lastPt.break) {
+                        uiCtx.beginPath();
+                        uiCtx.arc(lastPt.x, lastPt.y, 8, 0, Math.PI * 2);
+                        uiCtx.fillStyle = 'red';
+                        uiCtx.fill();
+                    }
+                }
+            }
+
+            requestAnimationFrame(animateEffects);
+        }
+
+        requestAnimationFrame(animateEffects);
+
     </script>
 </body>
 </html>
